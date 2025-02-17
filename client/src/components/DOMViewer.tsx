@@ -13,6 +13,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
+  const longPressTimer = useRef<number>();
+  const isLongPressing = useRef(false);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -34,58 +36,122 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         outline: 2px solid blue !important;
         background: rgba(0, 0, 255, 0.1) !important;
       }
+      /* Disable pointer events when in select mode */
+      .selectable * { pointer-events: none !important; }
+      .selectable a, .selectable button, .selectable input { 
+        pointer-events: none !important;
+      }
     `;
     doc.head.appendChild(style);
 
-    // Add interaction handlers
-    const handleMouseOver = (e: MouseEvent) => {
-      if (!isSelectMode) return;
-      const target = e.target as HTMLElement;
+    // Prevent all default behaviors when in select mode
+    const preventDefaultInSelectMode = (e: Event) => {
+      if (isSelectMode) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    // Add the event listener in the capture phase
+    doc.addEventListener('click', preventDefaultInSelectMode, true);
+    doc.addEventListener('mousedown', preventDefaultInSelectMode, true);
+    doc.addEventListener('mouseup', preventDefaultInSelectMode, true);
+    doc.addEventListener('touchstart', preventDefaultInSelectMode, true);
+    doc.addEventListener('touchend', preventDefaultInSelectMode, true);
+
+    const highlightElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
         target.classList.add('highlighted');
       }
     };
 
-    const handleMouseOut = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
+    const unhighlightElement = (target: HTMLElement) => {
       target.classList.remove('highlighted');
     };
 
-    const handleClick = (e: MouseEvent) => {
-      if (!isSelectMode) return;
-      e.preventDefault();
-      e.stopPropagation();
-      const target = e.target as HTMLElement;
+    const selectElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
         const selector = generateSelector(target);
         onElementSelect(selector);
-        // Store a pretty-printed version of the element's HTML
         setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
       }
     };
 
-    doc.body.addEventListener('mouseover', handleMouseOver);
-    doc.body.addEventListener('mouseout', handleMouseOut);
-    doc.body.addEventListener('click', handleClick);
+    // Desktop hover handlers
+    const handleMouseOver = (e: MouseEvent) => {
+      if (!isSelectMode) return;
+      highlightElement(e.target as HTMLElement);
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      unhighlightElement(e.target as HTMLElement);
+    };
+
+    // Desktop click handler
+    const handleElementSelect = (e: MouseEvent) => {
+      if (!isSelectMode) return;
+      e.preventDefault();
+      e.stopPropagation();
+      selectElement(e.target as HTMLElement);
+    };
+
+    // Mobile touch handlers
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isSelectMode) return;
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
+      isLongPressing.current = true;
+      longPressTimer.current = window.setTimeout(() => {
+        if (isLongPressing.current) {
+          highlightElement(target);
+        }
+      }, 500);
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (!isSelectMode) return;
+      clearTimeout(longPressTimer.current);
+
+      if (isLongPressing.current) {
+        const touch = e.changedTouches[0];
+        const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+        selectElement(target);
+        unhighlightElement(target);
+      }
+      isLongPressing.current = false;
+    };
+
+    const handleTouchMove = () => {
+      isLongPressing.current = false;
+      clearTimeout(longPressTimer.current);
+    };
+
+    // Add event listeners for both desktop and mobile
+    doc.addEventListener('mouseover', handleMouseOver, true);
+    doc.addEventListener('mouseout', handleMouseOut, true);
+    doc.addEventListener('click', handleElementSelect, true);
+    doc.addEventListener('touchstart', handleTouchStart, true);
+    doc.addEventListener('touchend', handleTouchEnd, true);
+    doc.addEventListener('touchmove', handleTouchMove, true);
 
     // Update body class based on select mode
     doc.body.classList.toggle('selectable', isSelectMode);
 
-    // Prevent default link behavior when in select mode
-    const links = doc.getElementsByTagName('a');
-    Array.from(links).forEach(link => {
-      link.addEventListener('click', (e) => {
-        if (isSelectMode) {
-          e.preventDefault();
-        }
-      });
-    });
-
     // Cleanup
     return () => {
-      doc.body.removeEventListener('mouseover', handleMouseOver);
-      doc.body.removeEventListener('mouseout', handleMouseOut);
-      doc.body.removeEventListener('click', handleClick);
+      clearTimeout(longPressTimer.current);
+      doc.removeEventListener('click', preventDefaultInSelectMode, true);
+      doc.removeEventListener('mousedown', preventDefaultInSelectMode, true);
+      doc.removeEventListener('mouseup', preventDefaultInSelectMode, true);
+      doc.removeEventListener('touchstart', preventDefaultInSelectMode, true);
+      doc.removeEventListener('touchend', preventDefaultInSelectMode, true);
+      doc.removeEventListener('mouseover', handleMouseOver, true);
+      doc.removeEventListener('mouseout', handleMouseOut, true);
+      doc.removeEventListener('click', handleElementSelect, true);
+      doc.removeEventListener('touchstart', handleTouchStart, true);
+      doc.removeEventListener('touchend', handleTouchEnd, true);
+      doc.removeEventListener('touchmove', handleTouchMove, true);
     };
   }, [content, onElementSelect, isSelectMode]);
 
@@ -148,7 +214,9 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         </Button>
         {isSelectMode && (
           <div className="text-sm text-muted-foreground">
-            Click any element to select it
+            {window.matchMedia('(hover: none)').matches 
+              ? "Long press any element to select it"
+              : "Click any element to select it"}
           </div>
         )}
       </div>
