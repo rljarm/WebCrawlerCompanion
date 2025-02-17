@@ -3,25 +3,65 @@ import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
   url: string;
 }
 
-const AVAILABLE_ATTRIBUTES = [
-  "text",
-  "href",
-  "src",
-  "alt",
-  "title",
-  "value",
-  "data-*"
-];
+const AVAILABLE_ATTRIBUTES = {
+  Basic: [
+    "text",
+    "href",
+    "src",
+    "alt",
+    "title",
+    "value",
+    "class",
+    "id",
+    "name",
+    "type"
+  ],
+  Data: [
+    "data-src",
+    "data-href",
+    "data-id",
+    "data-url",
+    "data-type",
+    "data-value",
+    "data-title"
+  ],
+  Media: [
+    "src",
+    "poster",
+    "preload",
+    "controls",
+    "autoplay",
+    "loop",
+    "muted",
+    "playsinline",
+    "data-video-url",
+    "data-audio-url",
+    "data-media-type",
+    "data-duration",
+    "data-timestamp"
+  ],
+  Download: [
+    "download",
+    "data-download-url",
+    "data-file-type",
+    "data-file-size",
+    "data-format"
+  ]
+};
 
 export default function ElementSelector({ selectedElement, url }: ElementSelectorProps) {
   const { toast } = useToast();
-  
+  const [selectedCategory, setSelectedCategory] = useState<keyof typeof AVAILABLE_ATTRIBUTES>("Basic");
+  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+
   const mutation = useMutation({
     mutationFn: async (data: { selector: string; attributes: string[]; url: string }) => {
       const response = await apiRequest("POST", "/api/selectors", {
@@ -33,6 +73,7 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/selectors"] });
       toast({ title: "Success", description: "Selector saved successfully" });
+      setSelectedAttributes([]);
     },
     onError: () => {
       toast({ 
@@ -43,11 +84,21 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
     }
   });
 
-  const handleSave = (attributes: string[]) => {
-    if (selectedElement && url) {
+  const handleAttributeSelect = (attribute: string) => {
+    if (!selectedAttributes.includes(attribute)) {
+      setSelectedAttributes([...selectedAttributes, attribute]);
+    }
+  };
+
+  const handleRemoveAttribute = (attribute: string) => {
+    setSelectedAttributes(selectedAttributes.filter(a => a !== attribute));
+  };
+
+  const handleSave = () => {
+    if (selectedElement && url && selectedAttributes.length > 0) {
       mutation.mutate({
         selector: selectedElement,
-        attributes,
+        attributes: selectedAttributes,
         url
       });
     }
@@ -71,15 +122,29 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
       </div>
 
       <div>
+        <div className="text-sm font-medium mb-2">Attribute Category:</div>
+        <Select value={selectedCategory} onValueChange={(value: keyof typeof AVAILABLE_ATTRIBUTES) => setSelectedCategory(value)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Choose attribute category" />
+          </SelectTrigger>
+          <SelectContent>
+            {Object.keys(AVAILABLE_ATTRIBUTES).map(category => (
+              <SelectItem key={category} value={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
         <div className="text-sm font-medium mb-2">Select Attributes:</div>
-        <Select
-          onValueChange={(value) => handleSave([value])}
-        >
+        <Select onValueChange={handleAttributeSelect}>
           <SelectTrigger>
             <SelectValue placeholder="Choose attributes to extract" />
           </SelectTrigger>
           <SelectContent>
-            {AVAILABLE_ATTRIBUTES.map(attr => (
+            {AVAILABLE_ATTRIBUTES[selectedCategory].map(attr => (
               <SelectItem key={attr} value={attr}>
                 {attr}
               </SelectItem>
@@ -87,6 +152,30 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
           </SelectContent>
         </Select>
       </div>
+
+      {selectedAttributes.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {selectedAttributes.map(attr => (
+            <Badge 
+              key={attr} 
+              variant="secondary"
+              onClick={() => handleRemoveAttribute(attr)}
+              className="cursor-pointer"
+            >
+              {attr} ×
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      <Button 
+        type="button" 
+        onClick={handleSave}
+        disabled={selectedAttributes.length === 0}
+        className="w-full"
+      >
+        Save Selection
+      </Button>
     </div>
   );
 }
