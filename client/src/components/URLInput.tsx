@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 interface URLInputProps {
-  onUrlSubmit: (url: string) => void;
+  onUrlSubmit: (url: string, content: string) => void;
 }
 
 export default function URLInput({ onUrlSubmit }: URLInputProps) {
@@ -20,7 +20,11 @@ export default function URLInput({ onUrlSubmit }: URLInputProps) {
     try {
       const response = await apiRequest("POST", "/api/fetch-dom", { url: inputUrl });
       const data = await response.json();
-      onUrlSubmit(inputUrl);
+      onUrlSubmit(inputUrl, data.content);
+      toast({
+        title: "Success",
+        description: "Page content loaded successfully",
+      });
     } catch (error) {
       toast({
         title: "Error",

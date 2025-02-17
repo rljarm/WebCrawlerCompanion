@@ -13,15 +13,20 @@ export default function Home() {
   const [zoom, setZoom] = useState(1);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
 
+  const handleUrlSubmit = async (submittedUrl: string, content: string) => {
+    setUrl(submittedUrl);
+    setDomContent(content);
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         <h1 className="text-4xl font-bold text-foreground">DOM Selector Builder</h1>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Card className="p-6">
-              <URLInput onUrlSubmit={(url) => setUrl(url)} />
+              <URLInput onUrlSubmit={handleUrlSubmit} />
               <div className="relative mt-4 border rounded-lg overflow-hidden">
                 <DOMViewer 
                   content={domContent} 

@@ -10,34 +10,61 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    if (iframeRef.current && content) {
-      const doc = iframeRef.current.contentDocument;
-      if (doc) {
-        doc.open();
-        doc.write(content);
-        doc.close();
+    const iframe = iframeRef.current;
+    if (!iframe || !content) return;
 
-        // Add interaction handlers
-        doc.body.addEventListener('mouseover', (e) => {
-          const target = e.target as HTMLElement;
-          target.style.outline = '2px solid blue';
-        });
+    const doc = iframe.contentDocument;
+    if (!doc) return;
 
-        doc.body.addEventListener('mouseout', (e) => {
-          const target = e.target as HTMLElement;
-          target.style.outline = '';
-        });
+    // Reset iframe content
+    doc.open();
+    doc.write(content);
+    doc.close();
 
-        doc.body.addEventListener('click', (e) => {
-          e.preventDefault();
-          const target = e.target as HTMLElement;
-          const selector = generateSelector(target);
-          onElementSelect(selector);
-        });
+    // Add required styles to the iframe document
+    const style = doc.createElement('style');
+    style.textContent = `
+      * { cursor: pointer; }
+      .highlighted { outline: 2px solid blue !important; }
+    `;
+    doc.head.appendChild(style);
+
+    // Add interaction handlers
+    const handleMouseOver = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        target.classList.add('highlighted');
       }
-    }
+    };
+
+    const handleMouseOut = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      target.classList.remove('highlighted');
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const target = e.target as HTMLElement;
+      if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        const selector = generateSelector(target);
+        onElementSelect(selector);
+      }
+    };
+
+    doc.body.addEventListener('mouseover', handleMouseOver);
+    doc.body.addEventListener('mouseout', handleMouseOut);
+    doc.body.addEventListener('click', handleClick);
+
+    // Cleanup
+    return () => {
+      doc.body.removeEventListener('mouseover', handleMouseOver);
+      doc.body.removeEventListener('mouseout', handleMouseOut);
+      doc.body.removeEventListener('click', handleClick);
+    };
   }, [content, onElementSelect]);
 
+  // Update zoom level
   useEffect(() => {
     if (iframeRef.current) {
       iframeRef.current.style.transform = `scale(${zoom})`;
@@ -47,17 +74,40 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
   const generateSelector = (element: HTMLElement): string => {
     const path: string[] = [];
-    while (element.parentElement) {
-      let selector = element.tagName.toLowerCase();
-      if (element.id) {
-        path.unshift(`#${element.id}`);
+    let currentElement: HTMLElement | null = element;
+
+    while (currentElement && currentElement.tagName !== 'HTML') {
+      let selector = currentElement.tagName.toLowerCase();
+
+      // Add id if it exists
+      if (currentElement.id) {
+        selector = `#${currentElement.id}`;
+        path.unshift(selector);
         break;
-      } else if (element.className) {
-        selector += `.${element.className.split(' ').join('.')}`;
       }
+
+      // Add classes if they exist
+      if (currentElement.className) {
+        const classes = Array.from(currentElement.classList)
+          .filter(className => className !== 'highlighted')
+          .join('.');
+        if (classes) {
+          selector += `.${classes}`;
+        }
+      }
+
+      // Add nth-child
+      const parent = currentElement.parentElement;
+      if (parent) {
+        const siblings = Array.from(parent.children);
+        const index = siblings.indexOf(currentElement) + 1;
+        selector += `:nth-child(${index})`;
+      }
+
       path.unshift(selector);
-      element = element.parentElement;
+      currentElement = currentElement.parentElement;
     }
+
     return path.join(' > ');
   };
 
