@@ -15,6 +15,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const [selectedHTML, setSelectedHTML] = useState<string>("");
   const longPressTimer = useRef<number>();
   const isLongPressing = useRef(false);
+  const currentHighlightedElement = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -61,12 +62,22 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const highlightElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        // Remove previous highlight
+        if (currentHighlightedElement.current) {
+          currentHighlightedElement.current.classList.remove('highlighted');
+        }
         target.classList.add('highlighted');
+        currentHighlightedElement.current = target;
+        // Update HTML preview immediately
+        setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
       }
     };
 
-    const unhighlightElement = (target: HTMLElement) => {
-      target.classList.remove('highlighted');
+    const unhighlightElement = () => {
+      if (currentHighlightedElement.current) {
+        currentHighlightedElement.current.classList.remove('highlighted');
+        currentHighlightedElement.current = null;
+      }
     };
 
     const selectElement = (target: HTMLElement) => {
@@ -84,7 +95,9 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleMouseOut = (e: MouseEvent) => {
-      unhighlightElement(e.target as HTMLElement);
+      if (!isLongPressing.current) {
+        unhighlightElement();
+      }
     };
 
     // Desktop click handler
@@ -98,6 +111,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Mobile touch handlers
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
+      e.preventDefault();
       const touch = e.touches[0];
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
 
@@ -106,18 +120,21 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         if (isLongPressing.current) {
           highlightElement(target);
         }
-      }, 500);
+      }, 500); // 500ms longpress duration
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (!isSelectMode) return;
+      e.preventDefault();
       clearTimeout(longPressTimer.current);
 
       if (isLongPressing.current) {
         const touch = e.changedTouches[0];
         const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-        selectElement(target);
-        unhighlightElement(target);
+        if (currentHighlightedElement.current === target) {
+          selectElement(target);
+        }
+        unhighlightElement();
       }
       isLongPressing.current = false;
     };
@@ -125,6 +142,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const handleTouchMove = () => {
       isLongPressing.current = false;
       clearTimeout(longPressTimer.current);
+      unhighlightElement();
     };
 
     // Add event listeners for both desktop and mobile
@@ -141,6 +159,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Cleanup
     return () => {
       clearTimeout(longPressTimer.current);
+      unhighlightElement();
       doc.removeEventListener('click', preventDefaultInSelectMode, true);
       doc.removeEventListener('mousedown', preventDefaultInSelectMode, true);
       doc.removeEventListener('mouseup', preventDefaultInSelectMode, true);
