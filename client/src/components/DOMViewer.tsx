@@ -33,10 +33,14 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const style = doc.createElement('style');
     style.textContent = `
       .selectable { cursor: crosshair !important; }
-      .highlighted { 
+      .dom-temp-highlight { 
         outline: 3px solid #2563eb !important;
         background: rgba(37, 99, 235, 0.1) !important;
-        transition: all 0.2s ease-in-out;
+        transition: all 0.2s ease-in-out !important;
+      }
+      .dom-selected {
+        outline: 3px solid #16a34a !important;
+        background: rgba(22, 163, 74, 0.1) !important;
       }
       /* Only disable pointer events on links and buttons */
       .selectable a, .selectable button { 
@@ -57,10 +61,11 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const highlightElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        // Remove previous temporary highlight
         if (currentHighlightedElement.current) {
-          currentHighlightedElement.current.classList.remove('highlighted');
+          currentHighlightedElement.current.classList.remove('dom-temp-highlight');
         }
-        target.classList.add('highlighted');
+        target.classList.add('dom-temp-highlight');
         currentHighlightedElement.current = target;
         setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
       }
@@ -68,7 +73,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const unhighlightElement = () => {
       if (currentHighlightedElement.current) {
-        currentHighlightedElement.current.classList.remove('highlighted');
+        currentHighlightedElement.current.classList.remove('dom-temp-highlight');
         currentHighlightedElement.current = null;
         setSelectedHTML("");
       }
@@ -76,6 +81,13 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const selectElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        // Remove any previous permanent selection
+        doc.querySelectorAll('.dom-selected').forEach(el => {
+          el.classList.remove('dom-selected');
+        });
+        // Add permanent selection class
+        target.classList.remove('dom-temp-highlight');
+        target.classList.add('dom-selected');
         const selector = generateSelector(target);
         onElementSelect(selector);
         setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
@@ -167,9 +179,9 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleElementSelect, true);
-    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
-    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
-    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
+    doc.addEventListener('touchstart', handleTouchStart, { passive: true });
+    doc.addEventListener('touchend', handleTouchEnd, { passive: true });
+    doc.addEventListener('touchmove', handleTouchMove, { passive: true });
 
     // Update body class based on select mode
     doc.body.classList.toggle('selectable', isSelectMode);
@@ -213,7 +225,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       // Add classes if they exist
       if (currentElement.className) {
         const classes = Array.from(currentElement.classList)
-          .filter(className => !['highlighted', 'selectable'].includes(className))
+          .filter(className => !['dom-temp-highlight', 'dom-selected', 'selectable'].includes(className))
           .join('.');
         if (classes) {
           selector += `.${classes}`;
@@ -239,7 +251,20 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <Button 
-          onClick={() => setIsSelectMode(!isSelectMode)}
+          onClick={() => {
+            if (!isSelectMode) {
+              setIsSelectMode(true);
+            } else {
+              setIsSelectMode(false);
+              // Clear any existing selections when exiting select mode
+              if (iframeRef.current?.contentDocument) {
+                iframeRef.current.contentDocument.querySelectorAll('.dom-selected, .dom-temp-highlight').forEach(el => {
+                  el.classList.remove('dom-selected', 'dom-temp-highlight');
+                });
+                setSelectedHTML("");
+              }
+            }
+          }}
           variant={isSelectMode ? "destructive" : "default"}
         >
           <SiCurseforge className="mr-2 h-4 w-4" />
