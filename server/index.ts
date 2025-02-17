@@ -82,13 +82,14 @@ async function findAvailablePort(startPort: number): Promise<number> {
       throw err;
     });
 
+    // Re-enable Vite setup with better error handling
     if (app.get("env") === "development") {
       log("Setting up Vite in development mode");
       try {
         await setupVite(app, server);
-        log("Vite setup completed");
+        log("Vite setup completed successfully");
       } catch (error) {
-        log(`Vite setup failed: ${error}`);
+        log(`Failed to setup Vite: ${error}`);
         throw error;
       }
     } else {
@@ -96,7 +97,8 @@ async function findAvailablePort(startPort: number): Promise<number> {
       serveStatic(app);
     }
 
-    const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
+    // Keep the port configuration at 6660
+    const startPort = process.env.PORT ? parseInt(process.env.PORT) : 6660;
     const port = await findAvailablePort(startPort);
 
     server.listen(port, "0.0.0.0", () => {
