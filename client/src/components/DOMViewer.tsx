@@ -34,41 +34,34 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     style.textContent = `
       .selectable { cursor: crosshair !important; }
       .highlighted { 
-        outline: 2px solid blue !important;
-        background: rgba(0, 0, 255, 0.1) !important;
+        outline: 3px solid #2563eb !important;
+        background: rgba(37, 99, 235, 0.1) !important;
+        transition: all 0.2s ease-in-out;
       }
-      /* Disable pointer events when in select mode */
-      .selectable * { pointer-events: none !important; }
-      .selectable a, .selectable button, .selectable input { 
+      /* Only disable pointer events on links and buttons */
+      .selectable a, .selectable button { 
         pointer-events: none !important;
+      }
+      .longpress-progress {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(37, 99, 235, 0.2);
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        transition: transform 0.5s ease-in-out;
       }
     `;
     doc.head.appendChild(style);
 
-    // Prevent all default behaviors when in select mode
-    const preventDefaultInSelectMode = (e: Event) => {
-      if (isSelectMode) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    };
-
-    // Add the event listener in the capture phase
-    doc.addEventListener('click', preventDefaultInSelectMode, true);
-    doc.addEventListener('mousedown', preventDefaultInSelectMode, true);
-    doc.addEventListener('mouseup', preventDefaultInSelectMode, true);
-    doc.addEventListener('touchstart', preventDefaultInSelectMode, true);
-    doc.addEventListener('touchend', preventDefaultInSelectMode, true);
-
     const highlightElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
-        // Remove previous highlight
         if (currentHighlightedElement.current) {
           currentHighlightedElement.current.classList.remove('highlighted');
         }
         target.classList.add('highlighted');
         currentHighlightedElement.current = target;
-        // Update HTML preview immediately
         setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
       }
     };
@@ -77,6 +70,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       if (currentHighlightedElement.current) {
         currentHighlightedElement.current.classList.remove('highlighted');
         currentHighlightedElement.current = null;
+        setSelectedHTML("");
       }
     };
 
@@ -85,6 +79,23 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         const selector = generateSelector(target);
         onElementSelect(selector);
         setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
+      }
+    };
+
+    let progressElement: HTMLElement | null = null;
+
+    const createProgressElement = (x: number, y: number) => {
+      progressElement = doc.createElement('div');
+      progressElement.className = 'longpress-progress';
+      progressElement.style.left = `${x}px`;
+      progressElement.style.top = `${y}px`;
+      doc.body.appendChild(progressElement);
+    };
+
+    const removeProgressElement = () => {
+      if (progressElement && progressElement.parentNode) {
+        progressElement.parentNode.removeChild(progressElement);
+        progressElement = null;
       }
     };
 
@@ -103,7 +114,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Desktop click handler
     const handleElementSelect = (e: MouseEvent) => {
       if (!isSelectMode) return;
-      e.preventDefault();
       e.stopPropagation();
       selectElement(e.target as HTMLElement);
     };
@@ -111,21 +121,25 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Mobile touch handlers
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
-      e.preventDefault();
       const touch = e.touches[0];
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
 
       isLongPressing.current = true;
+      createProgressElement(touch.clientX, touch.clientY);
+
       longPressTimer.current = window.setTimeout(() => {
         if (isLongPressing.current) {
           highlightElement(target);
+          if (progressElement) {
+            progressElement.style.transform = 'translate(-50%, -50%) scale(1.5)';
+          }
         }
-      }, 500); // 500ms longpress duration
+      }, 500);
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (!isSelectMode) return;
-      e.preventDefault();
+      removeProgressElement();
       clearTimeout(longPressTimer.current);
 
       if (isLongPressing.current) {
@@ -134,24 +148,28 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         if (currentHighlightedElement.current === target) {
           selectElement(target);
         }
-        unhighlightElement();
       }
       isLongPressing.current = false;
     };
 
-    const handleTouchMove = () => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isSelectMode) return;
       isLongPressing.current = false;
       clearTimeout(longPressTimer.current);
-      unhighlightElement();
+      removeProgressElement();
+
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      highlightElement(target);
     };
 
     // Add event listeners for both desktop and mobile
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleElementSelect, true);
-    doc.addEventListener('touchstart', handleTouchStart, true);
-    doc.addEventListener('touchend', handleTouchEnd, true);
-    doc.addEventListener('touchmove', handleTouchMove, true);
+    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
+    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
 
     // Update body class based on select mode
     doc.body.classList.toggle('selectable', isSelectMode);
@@ -159,18 +177,14 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Cleanup
     return () => {
       clearTimeout(longPressTimer.current);
+      removeProgressElement();
       unhighlightElement();
-      doc.removeEventListener('click', preventDefaultInSelectMode, true);
-      doc.removeEventListener('mousedown', preventDefaultInSelectMode, true);
-      doc.removeEventListener('mouseup', preventDefaultInSelectMode, true);
-      doc.removeEventListener('touchstart', preventDefaultInSelectMode, true);
-      doc.removeEventListener('touchend', preventDefaultInSelectMode, true);
       doc.removeEventListener('mouseover', handleMouseOver, true);
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleElementSelect, true);
-      doc.removeEventListener('touchstart', handleTouchStart, true);
-      doc.removeEventListener('touchend', handleTouchEnd, true);
-      doc.removeEventListener('touchmove', handleTouchMove, true);
+      doc.removeEventListener('touchstart', handleTouchStart);
+      doc.removeEventListener('touchend', handleTouchEnd);
+      doc.removeEventListener('touchmove', handleTouchMove);
     };
   }, [content, onElementSelect, isSelectMode]);
 
@@ -199,7 +213,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       // Add classes if they exist
       if (currentElement.className) {
         const classes = Array.from(currentElement.classList)
-          .filter(className => className !== 'highlighted' && className !== 'selectable')
+          .filter(className => !['highlighted', 'selectable'].includes(className))
           .join('.');
         if (classes) {
           selector += `.${classes}`;
