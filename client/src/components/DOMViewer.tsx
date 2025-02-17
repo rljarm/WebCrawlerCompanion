@@ -13,6 +13,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
+  const longPressTimer = useRef<number>();
+  const touchTarget = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -42,6 +44,19 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       .selectable a, .selectable button { 
         pointer-events: none !important;
       }
+      .longpress-indicator {
+        position: fixed;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: rgba(37, 99, 235, 0.2);
+        pointer-events: none;
+        transform: translate(-50%, -50%) scale(0);
+        transition: transform 0.5s ease-out;
+      }
+      .longpress-indicator.active {
+        transform: translate(-50%, -50%) scale(1);
+      }
     `;
     doc.head.appendChild(style);
 
@@ -66,6 +81,10 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       event.stopPropagation();
 
       const target = event.target as HTMLElement;
+      selectElement(target);
+    };
+
+    const selectElement = (target: HTMLElement) => {
       if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
         // Remove previous selections
         doc.querySelectorAll('.selected-element').forEach(el => {
@@ -82,19 +101,104 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       }
     };
 
-    // Add event listeners
+    // Mobile touch handling
+    let indicator: HTMLDivElement | null = null;
+
+    const createIndicator = (x: number, y: number) => {
+      indicator = doc.createElement('div');
+      indicator.className = 'longpress-indicator';
+      indicator.style.left = `${x}px`;
+      indicator.style.top = `${y}px`;
+      doc.body.appendChild(indicator);
+      // Force reflow
+      indicator.offsetHeight;
+      indicator.classList.add('active');
+    };
+
+    const removeIndicator = () => {
+      if (indicator && indicator.parentNode) {
+        indicator.classList.remove('active');
+        setTimeout(() => {
+          indicator?.parentNode?.removeChild(indicator);
+          indicator = null;
+        }, 500);
+      }
+    };
+
+    const handleTouchStart = (event: TouchEvent) => {
+      if (!isSelectMode) return;
+      event.preventDefault(); // Prevent scrolling during selection
+
+      const touch = event.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      touchTarget.current = target;
+      target.classList.add('highlight-target');
+      createIndicator(touch.clientX, touch.clientY);
+
+      longPressTimer.current = window.setTimeout(() => {
+        if (touchTarget.current === target) {
+          selectElement(target);
+        }
+      }, 500);
+    };
+
+    const handleTouchEnd = () => {
+      if (!isSelectMode) return;
+      clearTimeout(longPressTimer.current);
+      if (touchTarget.current) {
+        touchTarget.current.classList.remove('highlight-target');
+        touchTarget.current = null;
+      }
+      removeIndicator();
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!isSelectMode) return;
+      event.preventDefault();
+      clearTimeout(longPressTimer.current);
+
+      const touch = event.touches[0];
+      const newTarget = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
+      if (touchTarget.current) {
+        touchTarget.current.classList.remove('highlight-target');
+      }
+
+      if (newTarget && newTarget.tagName !== 'HTML' && newTarget.tagName !== 'BODY') {
+        touchTarget.current = newTarget;
+        newTarget.classList.add('highlight-target');
+        setSelectedHTML(newTarget.outerHTML.replace(/></g, '>\n<').trim());
+      }
+
+      if (indicator) {
+        indicator.style.left = `${touch.clientX}px`;
+        indicator.style.top = `${touch.clientY}px`;
+      }
+    };
+
+    // Add event listeners for both desktop and mobile
     doc.addEventListener('mouseover', handleMouseOver);
     doc.addEventListener('mouseout', handleMouseOut);
     doc.addEventListener('click', handleClick, true);
+    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
+    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
 
     // Cleanup
     return () => {
+      clearTimeout(longPressTimer.current);
+      removeIndicator();
       doc.removeEventListener('mouseover', handleMouseOver);
       doc.removeEventListener('mouseout', handleMouseOut);
       doc.removeEventListener('click', handleClick, true);
+      doc.removeEventListener('touchstart', handleTouchStart);
+      doc.removeEventListener('touchend', handleTouchEnd);
+      doc.removeEventListener('touchmove', handleTouchMove);
     };
   }, [content, onElementSelect, isSelectMode]);
 
@@ -170,7 +274,9 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         </Button>
         {isSelectMode && (
           <div className="text-sm text-muted-foreground">
-            Click any element to select it
+            {window.matchMedia('(hover: none)').matches 
+              ? "Long press any element to select it"
+              : "Click any element to select it"}
           </div>
         )}
       </div>
