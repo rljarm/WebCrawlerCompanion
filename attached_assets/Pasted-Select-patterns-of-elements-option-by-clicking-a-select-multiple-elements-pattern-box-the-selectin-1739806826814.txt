@@ -1,0 +1,163 @@
+Select patterns of elements option , by clicking a select multiple elements pattern box the selecting more than one element(finds common selector), a normal multiple elements that only scrapes those selected. For each selector a drop down menu of the attributes include data-src data-href all possible. React front end Django backend It has options for adding proxies/how and when to rotate(dump large number into text box, or upload a .text file.). Start URLs, and ability to save progress not redo already done(unless cleared). Based on below it shows a prediction of data gathered before going. If you follow a link you can associate it with the parent element. You can choose to gather/or follows URLs. Part of a way to accomplish it:   IGNORE NODE, DJANGO ONLY BACKEND PLAYWRIGHT IF NEEDED OTHERWAISE SCRAPY.
+
+Overview
+	1.	Render the Final DOM with a Headless Browser:
+Use a headless browser (e.g. Playwright) to execute JavaScript on the page and extract the finalized DOM.
+	2.	Send the Finalized HTML:
+Serve the fully-rendered HTML to your phone or front-end app.
+	3.	Make It Clickable for Selector Selection:
+Create a temporary, interactive environment where you can click/tap elements directly, and it highlights/selects them. Ability to zoom in and out of eleme.ts and to hit next to go down back to go up the page. Ability to choose attributes desire.
+
+Steps to Implement
+
+1. Render Finalized HTML in the Backend
+
+Use Playwright to fetch the fully-rendered DOM after the page’s JavaScript has executed.
+
+const puppeteer = require('puppeteer');
+
+(async () => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+
+  // Load the page and wait for all content to load
+  await page.goto('https://example.com', { waitUntil: 'networkidle2' });
+
+  // Get the finalized HTML
+  const finalizedHTML = await page.content(); // Includes all DOM changes by JavaScript
+
+  console.log(finalizedHTML); // Output the full HTML
+  await browser.close();
+})();
+
+2. Serve the Finalized HTML
+
+Use an Express server to deliver the finalized HTML to your phone or app.
+
+const express = require('express');
+const puppeteer = require('puppeteer');
+const app = express();
+
+app.get('/final-html', async (req, res) => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+
+  // Load and render the page
+  await page.goto('https://example.com', { waitUntil: 'networkidle2' });
+
+  // Fetch the finalized HTML
+  const finalizedHTML = await page.content();
+
+  res.send(finalizedHTML); // Send the HTML as a response
+  await browser.close();
+});
+
+app.listen(3000, () => console.log('Server running on port 3000'));
+
+Now, visiting http://your-backend-ip:3000/final-html on your phone will display the rendered page.
+
+3. Make the Page Interactive for Selector Selection
+
+Add an interactive JavaScript overlay to allow clicking/tapping on elements to select them. Inject a script into the rendered HTML to highlight and log selections.
+
+Example of Injected JavaScript:
+
+document.body.addEventListener('click', (event) => {
+  event.preventDefault(); // Prevent default behavior (like navigation)
+  event.stopPropagation();
+
+  // Highlight the clicked element
+  const element = event.target;
+  element.style.outline = '3px solid red';
+
+  // Log the selector (or send it to the backend)
+  console.log('Selected Element:', element.tagName, element.id, element.className);
+
+  // Example: Send the selector to the backend
+  fetch('http://your-backend-ip:3000/selection', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ selector: generateSelector(element) }),
+  });
+});
+
+// Utility to generate a CSS selector
+function generateSelector(element) {
+  let path = [];
+  while (element.parentElement) {
+    let tagName = element.tagName.toLowerCase();
+    if (element.id) {
+      path.unshift(`#${element.id}`);
+      break;
+    } else if (element.className) {
+      path.unshift(`${tagName}.${element.className.split(' ').join('.')}`);
+    } else {
+      path.unshift(tagName);
+    }
+    element = element.parentElement;
+  }
+  return path.join(' > ');
+}
+
+4. Serve the Interactive Page
+
+You can inject the above script into the finalized HTML on the backend before sending it. This ensures the page is ready for interaction when rendered on your phone.
+
+const express = require('express');
+const puppeteer = require('puppeteer');
+const app = express();
+
+app.get('/final-html', async (req, res) => {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+
+  await page.goto('https://example.com', { waitUntil: 'networkidle2' });
+
+  // Get finalized HTML
+  let finalizedHTML = await page.content();
+
+  // Inject JavaScript for interaction
+  const injectedScript = `
+    <script>
+      document.body.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const element = event.target;
+        element.style.outline = '3px solid red';
+        console.log('Selected:', element.tagName, element.id, element.className);
+      });
+    </script>
+  `;
+  finalizedHTML = finalizedHTML.replace('</body>', `${injectedScript}</body>`);
+
+  res.send(finalizedHTML); // Send the modified HTML
+  await browser.close();
+});
+
+app.listen(3000, () => console.log('Server running on port 3000'));
+
+5. Send Selector Back to the Backend
+
+When you click/tap an element, it sends the selector back to your server for further processing.
+
+Backend to Handle Selections:
+
+app.use(express.json());
+
+app.post('/selection', (req, res) => {
+  const { selector } = req.body;
+  console.log('Received selector:', selector);
+  res.send(`Selector ${selector} received.`);
+});
+
+Key Features of This Approach
+	1.	Full HTML Rendering:
+	•	Guarantees you see the exact structure of the DOM after JavaScript has run.
+	2.	Interactive Selection:
+	•	Elements are clickable, and their selectors are highlighted and captured.
+	3.	Dynamic Selector Generation:
+	•	Uses logic (like tag names, IDs, and classes) to create unique CSS selectors for selected elements.
+Include:
+	•	Live Preview: Send back the selected element’s content (e.g., innerHTML) for confirmation.
+	•	Highlight Hovered Elements: Use mouseover to temporarily highlight elements before selection.
+	•	Zoom and Pan Support: Add zoom/pan for mobile convenience if the page is large.
