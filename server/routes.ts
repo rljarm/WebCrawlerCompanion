@@ -39,15 +39,34 @@ export async function registerRoutes(app: Express) {
       return res.status(400).json({ error: "URL is required" });
     }
 
+    let browser = null;
     try {
-      const browser = await playwright.chromium.launch();
-      const page = await browser.newPage();
-      await page.goto(url);
+      console.log(`Fetching content for URL: ${url}`);
+      browser = await playwright.chromium.launch({
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      const context = await browser.newContext();
+      const page = await context.newPage();
+
+      await page.goto(url, {
+        waitUntil: 'networkidle',
+        timeout: 30000
+      });
+
       const content = await page.content();
-      await browser.close();
+      await context.close();
+      console.log(`Successfully fetched content for URL: ${url}`);
       res.json({ content });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch page content" });
+      console.error("Error fetching page content:", error);
+      res.status(500).json({ 
+        error: "Failed to fetch page content",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
     }
   });
 
