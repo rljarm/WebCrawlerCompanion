@@ -1,7 +1,7 @@
-import type { Express } from "express";
+import express, { type Express } from "express";
 import { createServer } from "http";
 import { storage } from "./storage";
-import playwright from "playwright";
+import fetch from "node-fetch";
 import { insertProxyConfigSchema, insertSelectorSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express) {
@@ -39,22 +39,11 @@ export async function registerRoutes(app: Express) {
       return res.status(400).json({ error: "URL is required" });
     }
 
-    let browser = null;
     try {
       console.log(`Fetching content for URL: ${url}`);
-      browser = await playwright.chromium.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      });
-      const context = await browser.newContext();
-      const page = await context.newPage();
+      const response = await fetch(url);
+      const content = await response.text();
 
-      await page.goto(url, {
-        waitUntil: 'networkidle',
-        timeout: 30000
-      });
-
-      const content = await page.content();
-      await context.close();
       console.log(`Successfully fetched content for URL: ${url}`);
       res.json({ content });
     } catch (error) {
@@ -63,10 +52,6 @@ export async function registerRoutes(app: Express) {
         error: "Failed to fetch page content",
         details: error instanceof Error ? error.message : String(error)
       });
-    } finally {
-      if (browser) {
-        await browser.close();
-      }
     }
   });
 
