@@ -97,8 +97,8 @@ async function findAvailablePort(startPort: number): Promise<number> {
       serveStatic(app);
     }
 
-    // Keep the port configuration at 6660
-    const startPort = process.env.PORT ? parseInt(process.env.PORT) : 6660;
+    // Use port 5000 to match workflow configuration
+    const startPort = process.env.PORT ? parseInt(process.env.PORT) : 5000;
     const port = await findAvailablePort(startPort);
 
     server.listen(port, "0.0.0.0", () => {
