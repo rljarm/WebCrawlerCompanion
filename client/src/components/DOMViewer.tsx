@@ -13,8 +13,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
-  const longPressTimer = useRef<number>();
-  const touchTarget = useRef<HTMLElement | null>(null);
+  const longPressTimeout = useRef<number>();
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -44,22 +43,10 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       .selectable a, .selectable button { 
         pointer-events: none !important;
       }
-      .longpress-indicator {
-        position: fixed;
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
-        background: rgba(37, 99, 235, 0.2);
-        pointer-events: none;
-        transform: translate(-50%, -50%) scale(0);
-        transition: transform 0.5s ease-out;
-      }
-      .longpress-indicator.active {
-        transform: translate(-50%, -50%) scale(1);
-      }
     `;
     doc.head.appendChild(style);
 
+    // Mouse events for desktop
     const handleMouseOver = (event: MouseEvent) => {
       if (!isSelectMode) return;
       const target = event.target as HTMLElement;
@@ -79,9 +66,47 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       if (!isSelectMode) return;
       event.preventDefault();
       event.stopPropagation();
+      selectElement(event.target as HTMLElement);
+    };
 
-      const target = event.target as HTMLElement;
-      selectElement(target);
+    // Touch events for mobile
+    const handleTouchStart = (event: TouchEvent) => {
+      if (!isSelectMode) return;
+      const touch = event.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      target.classList.add('highlight-target');
+
+      longPressTimeout.current = window.setTimeout(() => {
+        selectElement(target);
+      }, 500);
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      if (!isSelectMode) return;
+      clearTimeout(longPressTimeout.current);
+
+      const touch = event.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+
+      // Remove highlight from all elements
+      doc.querySelectorAll('.highlight-target').forEach(el => {
+        el.classList.remove('highlight-target');
+      });
+
+      if (target && target.tagName !== 'HTML' && target.tagName !== 'BODY') {
+        target.classList.add('highlight-target');
+        setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
+      }
+    };
+
+    const handleTouchEnd = () => {
+      if (!isSelectMode) return;
+      clearTimeout(longPressTimeout.current);
+      doc.querySelectorAll('.highlight-target').forEach(el => {
+        el.classList.remove('highlight-target');
+      });
     };
 
     const selectElement = (target: HTMLElement) => {
@@ -101,104 +126,26 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       }
     };
 
-    // Mobile touch handling
-    let indicator: HTMLDivElement | null = null;
-
-    const createIndicator = (x: number, y: number) => {
-      indicator = doc.createElement('div');
-      indicator.className = 'longpress-indicator';
-      indicator.style.left = `${x}px`;
-      indicator.style.top = `${y}px`;
-      doc.body.appendChild(indicator);
-      // Force reflow
-      indicator.offsetHeight;
-      indicator.classList.add('active');
-    };
-
-    const removeIndicator = () => {
-      if (indicator && indicator.parentNode) {
-        indicator.classList.remove('active');
-        setTimeout(() => {
-          indicator?.parentNode?.removeChild(indicator);
-          indicator = null;
-        }, 500);
-      }
-    };
-
-    const handleTouchStart = (event: TouchEvent) => {
-      if (!isSelectMode) return;
-      event.preventDefault(); // Prevent scrolling during selection
-
-      const touch = event.touches[0];
-      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-      touchTarget.current = target;
-      target.classList.add('highlight-target');
-      createIndicator(touch.clientX, touch.clientY);
-
-      longPressTimer.current = window.setTimeout(() => {
-        if (touchTarget.current === target) {
-          selectElement(target);
-        }
-      }, 500);
-    };
-
-    const handleTouchEnd = () => {
-      if (!isSelectMode) return;
-      clearTimeout(longPressTimer.current);
-      if (touchTarget.current) {
-        touchTarget.current.classList.remove('highlight-target');
-        touchTarget.current = null;
-      }
-      removeIndicator();
-    };
-
-    const handleTouchMove = (event: TouchEvent) => {
-      if (!isSelectMode) return;
-      event.preventDefault();
-      clearTimeout(longPressTimer.current);
-
-      const touch = event.touches[0];
-      const newTarget = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-
-      if (touchTarget.current) {
-        touchTarget.current.classList.remove('highlight-target');
-      }
-
-      if (newTarget && newTarget.tagName !== 'HTML' && newTarget.tagName !== 'BODY') {
-        touchTarget.current = newTarget;
-        newTarget.classList.add('highlight-target');
-        setSelectedHTML(newTarget.outerHTML.replace(/></g, '>\n<').trim());
-      }
-
-      if (indicator) {
-        indicator.style.left = `${touch.clientX}px`;
-        indicator.style.top = `${touch.clientY}px`;
-      }
-    };
-
-    // Add event listeners for both desktop and mobile
+    // Add event listeners
     doc.addEventListener('mouseover', handleMouseOver);
     doc.addEventListener('mouseout', handleMouseOut);
     doc.addEventListener('click', handleClick, true);
-    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
-    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
-    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
+    doc.addEventListener('touchstart', handleTouchStart);
+    doc.addEventListener('touchmove', handleTouchMove);
+    doc.addEventListener('touchend', handleTouchEnd);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
 
     // Cleanup
     return () => {
-      clearTimeout(longPressTimer.current);
-      removeIndicator();
+      clearTimeout(longPressTimeout.current);
       doc.removeEventListener('mouseover', handleMouseOver);
       doc.removeEventListener('mouseout', handleMouseOut);
       doc.removeEventListener('click', handleClick, true);
       doc.removeEventListener('touchstart', handleTouchStart);
-      doc.removeEventListener('touchend', handleTouchEnd);
       doc.removeEventListener('touchmove', handleTouchMove);
+      doc.removeEventListener('touchend', handleTouchEnd);
     };
   }, [content, onElementSelect, isSelectMode]);
 
