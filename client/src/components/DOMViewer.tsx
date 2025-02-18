@@ -38,7 +38,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         -webkit-tap-highlight-color: transparent !important;
         user-select: none !important;
         -webkit-touch-callout: none !important;
-        touch-action: none !important;
       }
       .selectable * { 
         cursor: crosshair !important; 
@@ -108,8 +107,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
-      e.preventDefault();
-      e.stopPropagation();
       isPressingRef.current = true;
 
       const touch = e.touches[0];
@@ -123,6 +120,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
       pressTimerRef.current = window.setTimeout(() => {
         if (pressTargetRef.current === target) {
+          e.preventDefault();
+          e.stopPropagation();
           selectElement(target);
         }
       }, 500);
@@ -130,8 +129,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     const handleTouchMove = (e: TouchEvent) => {
       if (!isSelectMode || !isPressingRef.current) return;
-      e.preventDefault();
-      e.stopPropagation();
 
       // Remove highlight from previous target
       if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
@@ -142,16 +139,19 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
       if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      pressTargetRef.current = target;
-      if (!target.classList.contains('selected-element')) {
-        target.classList.add('highlight-target');
+      if (pressTargetRef.current !== target) {
+        if (pressTimerRef.current) {
+          clearTimeout(pressTimerRef.current);
+        }
+        pressTargetRef.current = target;
+        if (!target.classList.contains('selected-element')) {
+          target.classList.add('highlight-target');
+        }
       }
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
       if (!isSelectMode) return;
-      e.preventDefault();
-      e.stopPropagation();
       isPressingRef.current = false;
 
       if (pressTimerRef.current) {
@@ -168,9 +168,9 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
-    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
-    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
-    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
+    doc.addEventListener('touchstart', handleTouchStart);
+    doc.addEventListener('touchmove', handleTouchMove);
+    doc.addEventListener('touchend', handleTouchEnd);
 
     // Prevent context menu
     doc.addEventListener('contextmenu', (e) => {
