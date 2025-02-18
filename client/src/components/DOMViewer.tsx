@@ -39,10 +39,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         outline: 3px solid #16a34a !important;
         background: rgba(22, 163, 74, 0.1) !important;
       }
-      /* Prevent clicks on interactive elements during selection */
-      .selectable a, .selectable button { 
-        pointer-events: none !important;
-      }
     `;
     doc.head.appendChild(style);
 
