@@ -36,6 +36,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         cursor: default !important;
         -webkit-tap-highlight-color: transparent !important;
         user-select: none !important;
+        -webkit-touch-callout: none !important;
+        touch-action: none !important;
       }
       .selectable * { 
         cursor: crosshair !important; 
@@ -99,6 +101,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
       e.preventDefault();
+      e.stopPropagation();
       isPressingRef.current = true;
 
       const touch = e.touches[0];
@@ -120,6 +123,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const handleTouchMove = (e: TouchEvent) => {
       if (!isSelectMode || !isPressingRef.current) return;
       e.preventDefault();
+      e.stopPropagation();
 
       // Remove highlight from previous target
       if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
@@ -136,8 +140,10 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       }
     };
 
-    const handleTouchEnd = () => {
+    const handleTouchEnd = (e: TouchEvent) => {
       if (!isSelectMode) return;
+      e.preventDefault();
+      e.stopPropagation();
       isPressingRef.current = false;
 
       if (pressTimerRef.current) {
@@ -156,7 +162,13 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     doc.addEventListener('click', handleClick, true);
     doc.addEventListener('touchstart', handleTouchStart, { passive: false });
     doc.addEventListener('touchmove', handleTouchMove, { passive: false });
-    doc.addEventListener('touchend', handleTouchEnd, true);
+    doc.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+    // Prevent context menu
+    doc.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      return false;
+    }, true);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
@@ -172,6 +184,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       doc.removeEventListener('touchstart', handleTouchStart);
       doc.removeEventListener('touchmove', handleTouchMove);
       doc.removeEventListener('touchend', handleTouchEnd);
+      doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
   }, [content, onElementSelect, isSelectMode]);
 
