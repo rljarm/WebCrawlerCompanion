@@ -76,6 +76,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       setSelectedHTML(target.outerHTML);
     };
 
+    // Touch event handlers for mobile
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
       e.preventDefault();
@@ -112,6 +113,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       );
     };
 
+    // Add event listeners
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
