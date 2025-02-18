@@ -27,120 +27,106 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     doc.write(content);
     doc.close();
 
-    // Add required styles to the iframe document
+    // Add styles for selection mode
     const style = doc.createElement('style');
     style.textContent = `
-      .selectable { cursor: crosshair !important; }
+      * { cursor: default !important; }
+      .selectable * { cursor: crosshair !important; }
       .highlight-target { 
-        outline: 3px solid #2563eb !important;
+        outline: 2px solid #2563eb !important;
         background: rgba(37, 99, 235, 0.1) !important;
       }
       .selected-element {
-        outline: 3px solid #16a34a !important;
+        outline: 2px solid #16a34a !important;
         background: rgba(22, 163, 74, 0.1) !important;
       }
     `;
     doc.head.appendChild(style);
 
-    // Mouse events for desktop
-    const handleMouseOver = (event: MouseEvent) => {
+    const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectMode) return;
-      const target = event.target as HTMLElement;
-      if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
-        target.classList.add('highlight-target');
-        setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
-      }
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+      target.classList.add('highlight-target');
     };
 
-    const handleMouseOut = (event: MouseEvent) => {
-      if (!isSelectMode) return;
-      const target = event.target as HTMLElement;
+    const handleMouseOut = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
       target.classList.remove('highlight-target');
     };
 
-    const handleClick = (event: MouseEvent) => {
+    const handleClick = (e: MouseEvent) => {
       if (!isSelectMode) return;
-      event.preventDefault();
-      event.stopPropagation();
-      selectElement(event.target as HTMLElement);
-    };
+      e.preventDefault();
+      e.stopPropagation();
 
-    // Touch events for mobile
-    const handleTouchStart = (event: TouchEvent) => {
-      if (!isSelectMode) return;
-      const touch = event.touches[0];
-      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      target.classList.add('highlight-target');
+      doc.querySelectorAll('.selected-element').forEach(el => 
+        el.classList.remove('selected-element')
+      );
+      doc.querySelectorAll('.highlight-target').forEach(el => 
+        el.classList.remove('highlight-target')
+      );
 
+      target.classList.add('selected-element');
+      const selector = generateSelector(target);
+      onElementSelect(selector);
+      setSelectedHTML(target.outerHTML);
+    };
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isSelectMode) return;
+      e.preventDefault();
+
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      target.classList.add('highlight-target');
       longPressTimeout.current = window.setTimeout(() => {
-        selectElement(target);
+        handleLongPress(target);
       }, 500);
     };
 
-    const handleTouchMove = (event: TouchEvent) => {
-      if (!isSelectMode) return;
-      clearTimeout(longPressTimeout.current);
+    const handleLongPress = (target: HTMLElement) => {
+      doc.querySelectorAll('.selected-element').forEach(el => 
+        el.classList.remove('selected-element')
+      );
+      doc.querySelectorAll('.highlight-target').forEach(el => 
+        el.classList.remove('highlight-target')
+      );
 
-      const touch = event.touches[0];
-      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-
-      // Remove highlight from all elements
-      doc.querySelectorAll('.highlight-target').forEach(el => {
-        el.classList.remove('highlight-target');
-      });
-
-      if (target && target.tagName !== 'HTML' && target.tagName !== 'BODY') {
-        target.classList.add('highlight-target');
-        setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
-      }
+      target.classList.add('selected-element');
+      const selector = generateSelector(target);
+      onElementSelect(selector);
+      setSelectedHTML(target.outerHTML);
     };
 
     const handleTouchEnd = () => {
       if (!isSelectMode) return;
       clearTimeout(longPressTimeout.current);
-      doc.querySelectorAll('.highlight-target').forEach(el => {
-        el.classList.remove('highlight-target');
-      });
+      doc.querySelectorAll('.highlight-target').forEach(el => 
+        el.classList.remove('highlight-target')
+      );
     };
 
-    const selectElement = (target: HTMLElement) => {
-      if (target.tagName !== 'HTML' && target.tagName !== 'BODY') {
-        // Remove previous selections
-        doc.querySelectorAll('.selected-element').forEach(el => {
-          el.classList.remove('selected-element');
-        });
-
-        // Add new selection
-        target.classList.remove('highlight-target');
-        target.classList.add('selected-element');
-
-        const selector = generateSelector(target);
-        onElementSelect(selector);
-        setSelectedHTML(target.outerHTML.replace(/></g, '>\n<').trim());
-      }
-    };
-
-    // Add event listeners
-    doc.addEventListener('mouseover', handleMouseOver);
-    doc.addEventListener('mouseout', handleMouseOut);
+    doc.addEventListener('mouseover', handleMouseOver, true);
+    doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
-    doc.addEventListener('touchstart', handleTouchStart);
-    doc.addEventListener('touchmove', handleTouchMove);
-    doc.addEventListener('touchend', handleTouchEnd);
+    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    doc.addEventListener('touchend', handleTouchEnd, true);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
 
-    // Cleanup
     return () => {
       clearTimeout(longPressTimeout.current);
-      doc.removeEventListener('mouseover', handleMouseOver);
-      doc.removeEventListener('mouseout', handleMouseOut);
+      doc.removeEventListener('mouseover', handleMouseOver, true);
+      doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
       doc.removeEventListener('touchstart', handleTouchStart);
-      doc.removeEventListener('touchmove', handleTouchMove);
       doc.removeEventListener('touchend', handleTouchEnd);
     };
   }, [content, onElementSelect, isSelectMode]);
@@ -195,19 +181,14 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <Button 
+        <Button
           onClick={() => {
-            if (!isSelectMode) {
-              setIsSelectMode(true);
-            } else {
-              setIsSelectMode(false);
-              // Clear any existing selections when exiting select mode
-              if (iframeRef.current?.contentDocument) {
-                iframeRef.current.contentDocument.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
-                  el.classList.remove('selected-element', 'highlight-target');
-                });
-                setSelectedHTML("");
-              }
+            setIsSelectMode(!isSelectMode);
+            if (iframeRef.current?.contentDocument) {
+              iframeRef.current.contentDocument.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
+                el.classList.remove('selected-element', 'highlight-target');
+              });
+              setSelectedHTML("");
             }
           }}
           variant={isSelectMode ? "destructive" : "default"}
