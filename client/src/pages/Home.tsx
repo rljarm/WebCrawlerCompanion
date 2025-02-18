@@ -47,7 +47,7 @@ export default function Home() {
 
           <div className="space-y-6">
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Selected Elements</h2>
+              <h2 className="text-xl font-semibold mb-4">Selected Element(s)</h2>
               <ElementSelector 
                 selectedElement={selectedElement} 
                 url={url}

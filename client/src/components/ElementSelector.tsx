@@ -129,14 +129,14 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-sm font-medium mb-2">Selected Selectors:</div>
+        <div className="text-sm font-medium mb-2">Selected Elements:</div>
         <div className="flex flex-wrap gap-2">
           {selectedSelectors.map((selector, index) => (
             <Badge 
               key={index}
               variant="secondary"
               onClick={() => handleRemoveSelector(selector)}
-              className="cursor-pointer"
+              className="cursor-pointer text-xs py-1 px-2"
             >
               {selector.length > 30 ? selector.substring(0, 27) + '...' : selector} ×
             </Badge>
@@ -177,17 +177,20 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
       </div>
 
       {selectedAttributes.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {selectedAttributes.map(attr => (
-            <Badge 
-              key={attr} 
-              variant="secondary"
-              onClick={() => handleRemoveAttribute(attr)}
-              className="cursor-pointer"
-            >
-              {attr} ×
-            </Badge>
-          ))}
+        <div>
+          <div className="text-sm font-medium mb-2">Selected Attributes:</div>
+          <div className="flex flex-wrap gap-2">
+            {selectedAttributes.map(attr => (
+              <Badge 
+                key={attr} 
+                variant="secondary"
+                onClick={() => handleRemoveAttribute(attr)}
+                className="cursor-pointer text-xs py-1 px-2"
+              >
+                {attr} ×
+              </Badge>
+            ))}
+          </div>
         </div>
       )}
 
