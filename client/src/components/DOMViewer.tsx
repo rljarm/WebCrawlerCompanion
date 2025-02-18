@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SiCurseforge } from "react-icons/si";
-import { useLongPress } from "@/hooks/useLongPress";
 
 interface DOMViewerProps {
   content: string;
@@ -14,6 +13,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
+  const pressTimerRef = useRef<number>();
+  const pressTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -56,7 +57,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       setSelectedHTML(element.outerHTML);
     };
 
-    // Event handlers
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectMode) return;
       const target = e.target as HTMLElement;
@@ -76,46 +76,54 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       selectElement(e.target as HTMLElement);
     };
 
-    // Add longpress handling
-    doc.querySelectorAll('*').forEach(element => {
-      const longPressProps = useLongPress({
-        onLongPress: () => {
-          if (isSelectMode) {
-            selectElement(element as HTMLElement);
-          }
-        },
-        threshold: 500
-      });
+    const handleTouchStart = (e: TouchEvent) => {
+      if (!isSelectMode) return;
+      e.preventDefault();
 
-      Object.entries(longPressProps).forEach(([event, handler]) => {
-        element.addEventListener(event.toLowerCase(), handler);
-      });
-    });
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      pressTargetRef.current = target;
+      target.classList.add('highlight-target');
+
+      pressTimerRef.current = window.setTimeout(() => {
+        if (pressTargetRef.current === target) {
+          selectElement(target);
+        }
+      }, 500);
+    };
+
+    const handleTouchEnd = () => {
+      if (pressTimerRef.current) {
+        clearTimeout(pressTimerRef.current);
+      }
+      if (pressTargetRef.current) {
+        pressTargetRef.current.classList.remove('highlight-target');
+        pressTargetRef.current = null;
+      }
+    };
 
     // Add event listeners
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
+    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    doc.addEventListener('touchend', handleTouchEnd, true);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
 
     return () => {
+      if (pressTimerRef.current) {
+        clearTimeout(pressTimerRef.current);
+      }
       // Clean up event listeners
       doc.removeEventListener('mouseover', handleMouseOver, true);
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
-
-      // Clean up longpress listeners
-      doc.querySelectorAll('*').forEach(element => {
-        const longPressProps = useLongPress({
-          onLongPress: () => {},
-          threshold: 500
-        });
-        Object.entries(longPressProps).forEach(([event, handler]) => {
-          element.removeEventListener(event.toLowerCase(), handler);
-        });
-      });
+      doc.removeEventListener('touchstart', handleTouchStart);
+      doc.removeEventListener('touchend', handleTouchEnd);
     };
   }, [content, onElementSelect, isSelectMode]);
 
