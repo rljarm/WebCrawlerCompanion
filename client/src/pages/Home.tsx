@@ -18,6 +18,10 @@ export default function Home() {
     setDomContent(content);
   };
 
+  const handleElementSelect = (selector: string, isMultiSelect: boolean) => {
+    setSelectedElement(selector);
+  };
+
   return (
     <div className="min-h-screen bg-background p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -31,7 +35,7 @@ export default function Home() {
                 <DOMViewer 
                   content={domContent} 
                   zoom={zoom}
-                  onElementSelect={setSelectedElement}
+                  onElementSelect={handleElementSelect}
                 />
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   <NavigationControls />
@@ -43,7 +47,7 @@ export default function Home() {
 
           <div className="space-y-6">
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Selected Element</h2>
+              <h2 className="text-xl font-semibold mb-4">Selected Elements</h2>
               <ElementSelector 
                 selectedElement={selectedElement} 
                 url={url}

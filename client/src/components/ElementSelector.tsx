@@ -4,7 +4,7 @@ import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
@@ -61,9 +61,18 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<keyof typeof AVAILABLE_ATTRIBUTES>("Basic");
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
+  const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (selectedElement) {
+      if (!selectedSelectors.includes(selectedElement)) {
+        setSelectedSelectors(prev => [...prev, selectedElement]);
+      }
+    }
+  }, [selectedElement]);
 
   const mutation = useMutation({
-    mutationFn: async (data: { selector: string; attributes: string[]; url: string }) => {
+    mutationFn: async (data: { selectors: string[]; attributes: string[]; url: string }) => {
       const response = await apiRequest("POST", "/api/selectors", {
         name: "Selection",
         ...data
@@ -72,13 +81,14 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/selectors"] });
-      toast({ title: "Success", description: "Selector saved successfully" });
+      toast({ title: "Success", description: "Selectors saved successfully" });
       setSelectedAttributes([]);
+      setSelectedSelectors([]);
     },
     onError: () => {
       toast({ 
         title: "Error", 
-        description: "Failed to save selector",
+        description: "Failed to save selectors",
         variant: "destructive"
       });
     }
@@ -94,20 +104,24 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
     setSelectedAttributes(selectedAttributes.filter(a => a !== attribute));
   };
 
+  const handleRemoveSelector = (selector: string) => {
+    setSelectedSelectors(selectedSelectors.filter(s => s !== selector));
+  };
+
   const handleSave = () => {
-    if (selectedElement && url && selectedAttributes.length > 0) {
+    if (selectedSelectors.length > 0 && url && selectedAttributes.length > 0) {
       mutation.mutate({
-        selector: selectedElement,
+        selectors: selectedSelectors,
         attributes: selectedAttributes,
         url
       });
     }
   };
 
-  if (!selectedElement) {
+  if (selectedSelectors.length === 0) {
     return (
       <div className="text-muted-foreground text-sm">
-        Click an element in the preview to select it
+        Click or long press an element in the preview to select it
       </div>
     );
   }
@@ -115,10 +129,19 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
   return (
     <div className="space-y-4">
       <div>
-        <div className="text-sm font-medium mb-2">Selected Selector:</div>
-        <code className="block p-2 bg-muted rounded-md text-sm break-all">
-          {selectedElement}
-        </code>
+        <div className="text-sm font-medium mb-2">Selected Selectors:</div>
+        <div className="flex flex-wrap gap-2">
+          {selectedSelectors.map((selector, index) => (
+            <Badge 
+              key={index}
+              variant="secondary"
+              onClick={() => handleRemoveSelector(selector)}
+              className="cursor-pointer"
+            >
+              {selector.length > 30 ? selector.substring(0, 27) + '...' : selector} ×
+            </Badge>
+          ))}
+        </div>
       </div>
 
       <div>
@@ -171,10 +194,10 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
       <Button 
         type="button" 
         onClick={handleSave}
-        disabled={selectedAttributes.length === 0}
+        disabled={selectedAttributes.length === 0 || selectedSelectors.length === 0}
         className="w-full"
       >
-        Save Selection
+        Save Selections
       </Button>
     </div>
   );

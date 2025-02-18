@@ -6,12 +6,13 @@ import { SiCurseforge } from "react-icons/si";
 interface DOMViewerProps {
   content: string;
   zoom: number;
-  onElementSelect: (selector: string) => void;
+  onElementSelect: (selector: string, isMultiSelect: boolean) => void;
 }
 
 export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
   const pressTimerRef = useRef<number>();
   const pressTargetRef = useRef<HTMLElement | null>(null);
@@ -58,17 +59,24 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const selectElement = (element: HTMLElement) => {
       if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
 
-      // Remove previous highlights but keep selections
+      // Remove previous highlights
       doc.querySelectorAll('.highlight-target').forEach(el => {
         el.classList.remove('highlight-target');
       });
+
+      // If not in multi-select mode, clear previous selections
+      if (!isMultiSelect) {
+        doc.querySelectorAll('.selected-element').forEach(el => {
+          el.classList.remove('selected-element');
+        });
+      }
 
       // Add new selection
       element.classList.remove('highlight-target');
       element.classList.add('selected-element');
 
       const selector = generateSelector(element);
-      onElementSelect(selector);
+      onElementSelect(selector, isMultiSelect);
       setSelectedHTML(element.outerHTML);
     };
 
@@ -186,7 +194,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       doc.removeEventListener('touchend', handleTouchEnd);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [content, onElementSelect, isSelectMode]);
+  }, [content, onElementSelect, isSelectMode, isMultiSelect]);
 
   const generateSelector = (element: HTMLElement): string => {
     const path: string[] = [];
@@ -235,24 +243,37 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <Button
-          onClick={() => {
-            setIsSelectMode(!isSelectMode);
-            if (iframeRef.current?.contentDocument) {
-              iframeRef.current.contentDocument.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
-                el.classList.remove('selected-element', 'highlight-target');
-              });
-              setSelectedHTML("");
-            }
-          }}
-          variant={isSelectMode ? "destructive" : "default"}
-        >
-          <SiCurseforge className="mr-2 h-4 w-4" />
-          {isSelectMode ? "Cancel Selection" : "Select Element"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => {
+              setIsSelectMode(!isSelectMode);
+              if (!isSelectMode) {
+                setIsMultiSelect(false);
+              }
+              if (iframeRef.current?.contentDocument) {
+                iframeRef.current.contentDocument.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
+                  el.classList.remove('selected-element', 'highlight-target');
+                });
+                setSelectedHTML("");
+              }
+            }}
+            variant={isSelectMode ? "destructive" : "default"}
+          >
+            <SiCurseforge className="mr-2 h-4 w-4" />
+            {isSelectMode ? "Cancel Selection" : "Select Element"}
+          </Button>
+          {isSelectMode && (
+            <Button
+              onClick={() => setIsMultiSelect(!isMultiSelect)}
+              variant={isMultiSelect ? "secondary" : "outline"}
+            >
+              Select Multiple
+            </Button>
+          )}
+        </div>
         {isSelectMode && (
           <div className="text-sm text-muted-foreground">
-            {window.matchMedia('(hover: none)').matches 
+            {window.matchMedia('(hover: none)').matches
               ? "Long press any element to select it"
               : "Click any element to select it"}
           </div>
