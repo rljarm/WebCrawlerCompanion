@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SiCurseforge } from "react-icons/si";
+import { useLongPress } from "@/hooks/useLongPress";
 
 interface DOMViewerProps {
   content: string;
@@ -13,7 +14,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
-  const longPressTimeout = useRef<number>();
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -43,6 +43,20 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     `;
     doc.head.appendChild(style);
 
+    const selectElement = (element: HTMLElement) => {
+      if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
+
+      doc.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
+        el.classList.remove('selected-element', 'highlight-target');
+      });
+
+      element.classList.add('selected-element');
+      const selector = generateSelector(element);
+      onElementSelect(selector);
+      setSelectedHTML(element.outerHTML);
+    };
+
+    // Event handlers
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectMode) return;
       const target = e.target as HTMLElement;
@@ -59,87 +73,51 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       if (!isSelectMode) return;
       e.preventDefault();
       e.stopPropagation();
-
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-      doc.querySelectorAll('.selected-element').forEach(el => 
-        el.classList.remove('selected-element')
-      );
-      doc.querySelectorAll('.highlight-target').forEach(el => 
-        el.classList.remove('highlight-target')
-      );
-
-      target.classList.add('selected-element');
-      const selector = generateSelector(target);
-      onElementSelect(selector);
-      setSelectedHTML(target.outerHTML);
+      selectElement(e.target as HTMLElement);
     };
 
-    // Touch event handlers for mobile
-    const handleTouchStart = (e: TouchEvent) => {
-      if (!isSelectMode) return;
-      e.preventDefault();
+    // Add longpress handling
+    doc.querySelectorAll('*').forEach(element => {
+      const longPressProps = useLongPress({
+        onLongPress: () => {
+          if (isSelectMode) {
+            selectElement(element as HTMLElement);
+          }
+        },
+        threshold: 500
+      });
 
-      const touch = e.touches[0];
-      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-      target.classList.add('highlight-target');
-      longPressTimeout.current = window.setTimeout(() => {
-        handleLongPress(target);
-      }, 500);
-    };
-
-    const handleLongPress = (target: HTMLElement) => {
-      doc.querySelectorAll('.selected-element').forEach(el => 
-        el.classList.remove('selected-element')
-      );
-      doc.querySelectorAll('.highlight-target').forEach(el => 
-        el.classList.remove('highlight-target')
-      );
-
-      target.classList.add('selected-element');
-      const selector = generateSelector(target);
-      onElementSelect(selector);
-      setSelectedHTML(target.outerHTML);
-    };
-
-    const handleTouchEnd = () => {
-      if (!isSelectMode) return;
-      clearTimeout(longPressTimeout.current);
-      doc.querySelectorAll('.highlight-target').forEach(el => 
-        el.classList.remove('highlight-target')
-      );
-    };
+      Object.entries(longPressProps).forEach(([event, handler]) => {
+        element.addEventListener(event.toLowerCase(), handler);
+      });
+    });
 
     // Add event listeners
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
-    doc.addEventListener('touchstart', handleTouchStart, { passive: false });
-    doc.addEventListener('touchend', handleTouchEnd, true);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectMode);
 
     return () => {
-      clearTimeout(longPressTimeout.current);
+      // Clean up event listeners
       doc.removeEventListener('mouseover', handleMouseOver, true);
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
-      doc.removeEventListener('touchstart', handleTouchStart);
-      doc.removeEventListener('touchend', handleTouchEnd);
+
+      // Clean up longpress listeners
+      doc.querySelectorAll('*').forEach(element => {
+        const longPressProps = useLongPress({
+          onLongPress: () => {},
+          threshold: 500
+        });
+        Object.entries(longPressProps).forEach(([event, handler]) => {
+          element.removeEventListener(event.toLowerCase(), handler);
+        });
+      });
     };
   }, [content, onElementSelect, isSelectMode]);
-
-  // Update zoom level
-  useEffect(() => {
-    if (iframeRef.current) {
-      iframeRef.current.style.transform = `scale(${zoom})`;
-      iframeRef.current.style.transformOrigin = 'top left';
-    }
-  }, [zoom]);
 
   const generateSelector = (element: HTMLElement): string => {
     const path: string[] = [];
@@ -148,14 +126,12 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     while (currentElement && currentElement.tagName !== 'HTML') {
       let selector = currentElement.tagName.toLowerCase();
 
-      // Add id if it exists
       if (currentElement.id) {
         selector = `#${currentElement.id}`;
         path.unshift(selector);
         break;
       }
 
-      // Add classes if they exist
       if (currentElement.className) {
         const classes = Array.from(currentElement.classList)
           .filter(className => !['highlight-target', 'selected-element', 'selectable'].includes(className))
@@ -165,7 +141,6 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         }
       }
 
-      // Add nth-child
       const parent = currentElement.parentElement;
       if (parent) {
         const siblings = Array.from(parent.children);
@@ -179,6 +154,14 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
 
     return path.join(' > ');
   };
+
+  // Update zoom level
+  useEffect(() => {
+    if (iframeRef.current) {
+      iframeRef.current.style.transform = `scale(${zoom})`;
+      iframeRef.current.style.transformOrigin = 'top left';
+    }
+  }, [zoom]);
 
   return (
     <div className="space-y-4">

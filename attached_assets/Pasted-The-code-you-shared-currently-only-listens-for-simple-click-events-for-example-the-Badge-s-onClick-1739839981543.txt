@@ -1,0 +1,68 @@
+The code you shared currently only listens for simple click events (for example, the Badge’s onClick for removing an attribute) and doesn’t include any logic for a long press. To implement long press functionality (for instance, to remove an attribute only after the user has pressed and held the Badge for a certain duration), you can create a custom hook that listens for mouse/touch events and tracks the duration of the press.
+
+Below is an example of a custom hook called useLongPress that you can use to wrap any element and trigger an action when a long press (e.g., 500 milliseconds) is detected:
+
+import { useState, useEffect, useCallback } from "react";
+
+interface LongPressOptions {
+  threshold?: number;
+  onLongPress: () => void;
+}
+
+export function useLongPress({ onLongPress, threshold = 500 }: LongPressOptions) {
+  const [pressTimer, setPressTimer] = useState<NodeJS.Timeout | null>(null);
+
+  const start = useCallback(() => {
+    // Start the timer on press start
+    const timer = setTimeout(() => {
+      onLongPress();
+    }, threshold);
+    setPressTimer(timer);
+  }, [onLongPress, threshold]);
+
+  const clear = useCallback(() => {
+    // Clear the timer if the press ends before threshold
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      setPressTimer(null);
+    }
+  }, [pressTimer]);
+
+  return {
+    onMouseDown: start,
+    onTouchStart: start,
+    onMouseUp: clear,
+    onMouseLeave: clear,
+    onTouchEnd: clear
+  };
+}
+
+You can then use this hook on your Badge component (or any other element) to trigger a long press action. For example, if you want a long press on a Badge to remove the attribute instead of a simple click, modify your Badge like this:
+
+import { useLongPress } from "./useLongPress"; // adjust the import path accordingly
+
+// Inside your ElementSelector component’s render
+{selectedAttributes.map(attr => {
+  const longPressEvent = useLongPress({
+    onLongPress: () => handleRemoveAttribute(attr),
+    threshold: 700 // threshold in milliseconds; adjust as needed
+  });
+
+  return (
+    <Badge 
+      key={attr} 
+      variant="secondary"
+      // Spread the long press event handlers
+      {...longPressEvent}
+      className="cursor-pointer"
+    >
+      {attr} (hold to remove)
+    </Badge>
+  );
+})}
+
+This way, when the user holds the Badge for the specified threshold (700 ms in the example), the handleRemoveAttribute function will be triggered. You can adjust the threshold value to match the desired responsiveness.
+
+If you need the long press to trigger another action (or to add other functionality), you can customize the hook and its usage accordingly.
+
+[Timestamp: 2025-02-17 14:45:00]
