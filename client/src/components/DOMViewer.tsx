@@ -15,6 +15,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
   const [selectedHTML, setSelectedHTML] = useState<string>("");
   const pressTimerRef = useRef<number>();
   const pressTargetRef = useRef<HTMLElement | null>(null);
+  const isPressingRef = useRef(false);
 
   useEffect(() => {
     const iframe = iframeRef.current;
@@ -31,15 +32,23 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     // Add styles for selection mode
     const style = doc.createElement('style');
     style.textContent = `
-      * { cursor: default !important; }
-      .selectable * { cursor: crosshair !important; }
+      * { 
+        cursor: default !important;
+        -webkit-tap-highlight-color: transparent !important;
+        user-select: none !important;
+      }
+      .selectable * { 
+        cursor: crosshair !important; 
+      }
       .highlight-target { 
         outline: 2px solid #2563eb !important;
         background: rgba(37, 99, 235, 0.1) !important;
+        transition: outline 0.15s ease, background 0.15s ease !important;
       }
       .selected-element {
-        outline: 2px solid #16a34a !important;
+        outline: 3px solid #16a34a !important;
         background: rgba(22, 163, 74, 0.1) !important;
+        transition: outline 0.15s ease, background 0.15s ease !important;
       }
     `;
     doc.head.appendChild(style);
@@ -47,26 +56,37 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const selectElement = (element: HTMLElement) => {
       if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
 
-      doc.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
-        el.classList.remove('selected-element', 'highlight-target');
+      // Remove previous highlights but keep selections
+      doc.querySelectorAll('.highlight-target').forEach(el => {
+        el.classList.remove('highlight-target');
       });
 
+      // Add new selection
+      element.classList.remove('highlight-target');
       element.classList.add('selected-element');
+
       const selector = generateSelector(element);
       onElementSelect(selector);
       setSelectedHTML(element.outerHTML);
     };
 
     const handleMouseOver = (e: MouseEvent) => {
-      if (!isSelectMode) return;
+      if (!isSelectMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
-      target.classList.add('highlight-target');
+
+      // Don't highlight if already selected
+      if (!target.classList.contains('selected-element')) {
+        target.classList.add('highlight-target');
+      }
     };
 
     const handleMouseOut = (e: MouseEvent) => {
+      if (!isSelectMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
-      target.classList.remove('highlight-target');
+      if (!target.classList.contains('selected-element')) {
+        target.classList.remove('highlight-target');
+      }
     };
 
     const handleClick = (e: MouseEvent) => {
@@ -79,13 +99,16 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     const handleTouchStart = (e: TouchEvent) => {
       if (!isSelectMode) return;
       e.preventDefault();
+      isPressingRef.current = true;
 
       const touch = e.touches[0];
       const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
       if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
       pressTargetRef.current = target;
-      target.classList.add('highlight-target');
+      if (!target.classList.contains('selected-element')) {
+        target.classList.add('highlight-target');
+      }
 
       pressTimerRef.current = window.setTimeout(() => {
         if (pressTargetRef.current === target) {
@@ -94,14 +117,37 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       }, 500);
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!isSelectMode || !isPressingRef.current) return;
+      e.preventDefault();
+
+      // Remove highlight from previous target
+      if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
+        pressTargetRef.current.classList.remove('highlight-target');
+      }
+
+      const touch = e.touches[0];
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      pressTargetRef.current = target;
+      if (!target.classList.contains('selected-element')) {
+        target.classList.add('highlight-target');
+      }
+    };
+
     const handleTouchEnd = () => {
+      if (!isSelectMode) return;
+      isPressingRef.current = false;
+
       if (pressTimerRef.current) {
         clearTimeout(pressTimerRef.current);
       }
-      if (pressTargetRef.current) {
+
+      if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
         pressTargetRef.current.classList.remove('highlight-target');
-        pressTargetRef.current = null;
       }
+      pressTargetRef.current = null;
     };
 
     // Add event listeners
@@ -109,6 +155,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
     doc.addEventListener('touchstart', handleTouchStart, { passive: false });
+    doc.addEventListener('touchmove', handleTouchMove, { passive: false });
     doc.addEventListener('touchend', handleTouchEnd, true);
 
     // Toggle selection mode class
@@ -123,6 +170,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
       doc.removeEventListener('touchstart', handleTouchStart);
+      doc.removeEventListener('touchmove', handleTouchMove);
       doc.removeEventListener('touchend', handleTouchEnd);
     };
   }, [content, onElementSelect, isSelectMode]);
