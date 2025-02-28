@@ -24,15 +24,13 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const handleWebSocketMessage = (data: any) => {
       if (!iframeRef.current?.contentDocument) return;
 
-      if (data.type === 'ELEMENT_HIGHLIGHTED' || data.type === 'ELEMENT_SELECTED') {
-        const element = iframeRef.current.contentDocument.querySelector(data.selector);
-        if (element) {
-          removeAllHighlights();
-          element.classList.add(data.type === 'ELEMENT_HIGHLIGHTED' ? 'highlight-target' : 'selected-element');
-          if (data.type === 'ELEMENT_SELECTED') {
-            onElementSelect(data.selector, false);
-          }
-        }
+      const element = iframeRef.current.contentDocument.querySelector(data.selector);
+      if (!element) return;
+
+      if (data.type === 'ELEMENT_SELECTED') {
+        removeAllHighlights();
+        element.classList.add('selected-element');
+        onElementSelect(data.selector, false);
       }
     };
 
@@ -42,8 +40,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const removeAllHighlights = () => {
     if (!iframeRef.current?.contentDocument) return;
 
-    const highlights = iframeRef.current.contentDocument.querySelectorAll('.highlight-target, .selected-element');
-    highlights.forEach(el => {
+    const elements = iframeRef.current.contentDocument.querySelectorAll('.highlight-target, .selected-element');
+    elements.forEach(el => {
       el.classList.remove('highlight-target', 'selected-element');
     });
   };
@@ -53,11 +51,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     if (content && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
-        const scrollPosition = {
-          x: iframeRef.current.contentWindow?.scrollX || 0,
-          y: iframeRef.current.contentWindow?.scrollY || 0
-        };
-
         doc.open();
         doc.write(`
           <!DOCTYPE html>
@@ -97,10 +90,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
           </html>
         `);
         doc.close();
-
-        if (iframeRef.current.contentWindow) {
-          iframeRef.current.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
-        }
         setIsIframeLoaded(true);
       }
     }
@@ -118,40 +107,51 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const handleClick = (e: MouseEvent) => {
       if (!isSelectionMode) return;
 
-      e.preventDefault();
-      e.stopPropagation();
+      try {
+        e.preventDefault();
+        e.stopPropagation();
 
-      const target = e.target as HTMLElement;
-      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
+        const target = e.target as HTMLElement;
+        if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      removeAllHighlights();
-      target.classList.add('selected-element');
+        removeAllHighlights();
 
-      const selector = generateSelector(target);
-      onElementSelect(selector, false);
+        // Ensure the element still exists before adding class
+        if (target.isConnected) {
+          target.classList.add('selected-element');
 
-      if (isConnected) {
-        const data: Record<string, string> = {
-          text: target.textContent?.trim() || ''
-        };
+          const selector = generateSelector(target);
+          const data: Record<string, string> = {
+            text: target.textContent?.trim() || ''
+          };
 
-        if (target instanceof HTMLAnchorElement) {
-          data.href = target.href;
+          if (target instanceof HTMLAnchorElement) {
+            data.href = target.href;
+          }
+
+          onElementSelect(selector, false);
+
+          if (isConnected) {
+            send('SELECT_ELEMENT', { 
+              selector,
+              attributes: Object.keys(data),
+              data
+            });
+          }
         }
-
-        send('SELECT_ELEMENT', { 
-          selector,
-          attributes: Object.keys(data),
-          data
-        });
+      } catch (error) {
+        console.error('Error during element selection:', error);
       }
     };
 
-    // Prevent any link navigation in selection mode
+    // Prevent link navigation in selection mode
     const preventNavigation = (e: MouseEvent) => {
-      if (isSelectionMode && (e.target as HTMLElement).closest('a')) {
-        e.preventDefault();
-        e.stopPropagation();
+      if (isSelectionMode) {
+        const target = e.target as HTMLElement;
+        if (target?.closest('a')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
       }
     };
 
