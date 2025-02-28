@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiCurseforge } from "react-icons/si";
+import { Eye } from "lucide-react";
 
 interface DOMViewerProps {
   content: string;
@@ -14,6 +15,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
+  const [previewElement, setPreviewElement] = useState<HTMLElement | null>(null);
   const pressTimerRef = useRef<number>();
   const pressTargetRef = useRef<HTMLElement | null>(null);
   const isPressingRef = useRef(false);
@@ -55,22 +57,19 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
               background: rgba(37, 99, 235, 0.1) !important;
               transition: outline 0.15s ease, background 0.15s ease !important;
             }
+            .preview-element {
+              outline: 3px solid #eab308 !important;
+              background: rgba(234, 179, 8, 0.1) !important;
+            }
             .selected-element {
               outline: 3px solid #16a34a !important;
               background: rgba(22, 163, 74, 0.1) !important;
-              transition: outline 0.15s ease, background 0.15s ease !important;
-            }
-            img {
-              display: inline-block;
-              max-width: 100%;
-              height: auto;
             }
           </style>
         </head>
         <body>
           ${content}
           <script>
-            // Prevent link navigation
             document.addEventListener('click', function(e) {
               if (e.target.tagName === 'A') {
                 e.preventDefault();
@@ -96,7 +95,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      if (!target.classList.contains('selected-element')) {
+      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
         target.classList.add('highlight-target');
       }
     };
@@ -104,7 +103,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const handleMouseOut = (e: MouseEvent) => {
       if (!isSelectionMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
-      if (!target.classList.contains('selected-element')) {
+      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
         target.classList.remove('highlight-target');
       }
     };
@@ -117,17 +116,15 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Remove highlight
+      // Remove previous preview
+      doc.querySelectorAll('.preview-element').forEach(el => {
+        el.classList.remove('preview-element');
+      });
+
+      // Remove highlight and add preview
       target.classList.remove('highlight-target');
-      // Add selection
-      target.classList.add('selected-element');
-
-      const selector = generateSelector(target);
-      onElementSelect(selector, isMultiSelect);
-      setSelectedHTML(target.outerHTML);
-
-      // Restore scroll position
-      restoreScroll();
+      target.classList.add('preview-element');
+      setPreviewElement(target);
     };
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -139,14 +136,13 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
       pressTargetRef.current = target;
-      if (!target.classList.contains('selected-element')) {
+      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
         target.classList.add('highlight-target');
       }
 
       pressTimerRef.current = window.setTimeout(() => {
         if (pressTargetRef.current === target) {
           e.preventDefault();
-          e.stopPropagation();
           handleClick(new MouseEvent('click', { bubbles: true, cancelable: true }));
         }
       }, 500);
@@ -174,42 +170,22 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       doc.removeEventListener('touchstart', handleTouchStart);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [content, onElementSelect, isSelectionMode, isMultiSelect]);
+  }, [content, isSelectionMode]);
 
-  const generateSelector = (element: HTMLElement): string => {
-    const path: string[] = [];
-    let currentElement: HTMLElement | null = element;
+  const handleConfirmSelection = () => {
+    if (!previewElement) return;
 
-    while (currentElement && currentElement.tagName !== 'HTML') {
-      let selector = currentElement.tagName.toLowerCase();
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
 
-      if (currentElement.id) {
-        selector = `#${currentElement.id}`;
-        path.unshift(selector);
-        break;
-      }
+    // Add to selected elements
+    previewElement.classList.remove('preview-element');
+    previewElement.classList.add('selected-element');
 
-      if (currentElement.className) {
-        const classes = Array.from(currentElement.classList)
-          .filter(className => !['highlight-target', 'selected-element', 'selectable'].includes(className))
-          .join('.');
-        if (classes) {
-          selector += `.${classes}`;
-        }
-      }
-
-      const parent = currentElement.parentElement;
-      if (parent) {
-        const siblings = Array.from(parent.children);
-        const index = siblings.indexOf(currentElement) + 1;
-        selector += `:nth-child(${index})`;
-      }
-
-      path.unshift(selector);
-      currentElement = currentElement.parentElement;
-    }
-
-    return path.join(' > ');
+    const selector = generateSelector(previewElement);
+    onElementSelect(selector, isMultiSelect);
+    setSelectedHTML(previewElement.outerHTML);
+    setPreviewElement(null);
   };
 
   useEffect(() => {
@@ -219,28 +195,38 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     }
   }, [zoom]);
 
+  const generateSelector = (element: HTMLElement): string => {
+    let selector = element.tagName.toLowerCase();
+    if (element.id) {
+      selector += `#${element.id}`;
+    } else if (element.classList.length > 0) {
+      selector += `.${Array.from(element.classList)
+        .filter(c => !['highlight-target', 'preview-element', 'selected-element', 'selectable'].includes(c))
+        .join('.')}`;
+    }
+    return selector;
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="flex gap-2">
           <Button
-            onClick={() => {
-              onSelectionModeChange(!isSelectionMode);
-              if (!isSelectionMode) {
-                setIsMultiSelect(false);
-              }
-              if (iframeRef.current?.contentDocument) {
-                iframeRef.current.contentDocument.querySelectorAll('.selected-element, .highlight-target').forEach(el => {
-                  el.classList.remove('selected-element', 'highlight-target');
-                });
-                setSelectedHTML("");
-              }
-            }}
+            onClick={() => onSelectionModeChange(!isSelectionMode)}
             variant={isSelectionMode ? "destructive" : "default"}
           >
             <SiCurseforge className="mr-2 h-4 w-4" />
             {isSelectionMode ? "Cancel Selection" : "Select Element"}
           </Button>
+          {previewElement && (
+            <Button
+              onClick={handleConfirmSelection}
+              variant="secondary"
+            >
+              <Eye className="mr-2 h-4 w-4" />
+              Preview Selection
+            </Button>
+          )}
         </div>
         {isSelectionMode && (
           <div className="text-sm text-muted-foreground">

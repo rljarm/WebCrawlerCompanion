@@ -1,17 +1,14 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Button } from "@/components/ui/button";
-import { useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { X, Plus, ChevronUp, ChevronDown, ArrowUpToLine } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
@@ -36,7 +33,6 @@ const ACTIONS = [
 
 export default function ElementSelector({ selectedElement, url, onSelectionStart }: ElementSelectorProps) {
   const { toast } = useToast();
-  const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
   const [selectedHtml, setSelectedHtml] = useState<string>("");
   const [isHtmlDialogOpen, setIsHtmlDialogOpen] = useState(false);
@@ -49,39 +45,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
       }
     }
   }, [selectedElement]);
-
-  const mutation = useMutation({
-    mutationFn: async (data: { selectors: string[]; attributes: string[]; url: string }) => {
-      const response = await apiRequest("POST", "/api/selectors", {
-        name: "Selection",
-        ...data
-      });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/selectors"] });
-      toast({ title: "Success", description: "Selectors saved successfully" });
-      setSelectedAttributes([]);
-      setSelectedSelectors([]);
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to save selectors",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const handleAttributeSelect = (attribute: string) => {
-    if (!selectedAttributes.includes(attribute)) {
-      setSelectedAttributes([...selectedAttributes, attribute]);
-    }
-  };
-
-  const handleRemoveAttribute = (attribute: string) => {
-    setSelectedAttributes(selectedAttributes.filter(a => a !== attribute));
-  };
 
   const handleRemoveSelector = (selector: string) => {
     setSelectedSelectors(selectedSelectors.filter(s => s !== selector));
@@ -210,7 +173,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
                 <DropdownMenuItem
                   key={category.category}
                   className="flex items-center"
-                  onSelect={() => handleAttributeSelect(category.items[0])}
                 >
                   {category.category}
                 </DropdownMenuItem>
