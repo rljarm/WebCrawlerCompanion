@@ -5,6 +5,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { X } from "lucide-react";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
@@ -63,6 +65,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   const [selectedCategory, setSelectedCategory] = useState<keyof typeof AVAILABLE_ATTRIBUTES>("Basic");
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
+  const [selectedHtml, setSelectedHtml] = useState<string>("");
+  const [isHtmlDialogOpen, setIsHtmlDialogOpen] = useState(false);
 
   useEffect(() => {
     if (selectedElement) {
@@ -109,6 +113,17 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     setSelectedSelectors(selectedSelectors.filter(s => s !== selector));
   };
 
+  const handleShowHtml = (selector: string) => {
+    const iframe = document.querySelector('iframe');
+    if (iframe && iframe.contentDocument) {
+      const element = iframe.contentDocument.querySelector(selector);
+      if (element) {
+        setSelectedHtml(element.outerHTML);
+        setIsHtmlDialogOpen(true);
+      }
+    }
+  };
+
   const handleSave = () => {
     if (selectedSelectors.length > 0 && url && selectedAttributes.length > 0) {
       mutation.mutate({
@@ -142,14 +157,30 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         <div className="text-sm font-medium mb-2">Selected Elements:</div>
         <div className="flex flex-wrap gap-2">
           {selectedSelectors.map((selector, index) => (
-            <Badge 
-              key={index}
-              variant="secondary"
-              onClick={() => handleRemoveSelector(selector)}
-              className="cursor-pointer text-xs py-1 px-2"
-            >
-              {selector.length > 30 ? selector.substring(0, 27) + '...' : selector} ×
-            </Badge>
+            <div key={index} className="flex items-center">
+              <Badge 
+                variant="secondary"
+                className="cursor-pointer text-xs py-1 pl-2 pr-1 flex items-center gap-1"
+              >
+                <span 
+                  onClick={() => handleShowHtml(selector)}
+                  className="truncate max-w-[200px]"
+                >
+                  {selector}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveSelector(selector);
+                  }}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </Badge>
+            </div>
           ))}
         </div>
         <Button 
@@ -219,6 +250,17 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
       >
         Save Selections
       </Button>
+
+      <Dialog open={isHtmlDialogOpen} onOpenChange={setIsHtmlDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Selected Element HTML</DialogTitle>
+          </DialogHeader>
+          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
+            <code>{selectedHtml}</code>
+          </pre>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
