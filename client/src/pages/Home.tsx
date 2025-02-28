@@ -15,13 +15,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
 
 const DEFAULT_URL = "https://en.wikipedia.org/wiki/Main_Page";
 
@@ -58,7 +51,11 @@ export default function Home() {
 
   const handleElementSelect = (selector: string, isMultiSelect: boolean) => {
     setSelectedElement(selector);
-    setIsSelectionMode(false); // Turn off selection mode after selecting
+    // Don't automatically turn off selection mode
+  };
+
+  const toggleSelectionMode = () => {
+    setIsSelectionMode(!isSelectionMode);
   };
 
   return (
@@ -89,33 +86,18 @@ export default function Home() {
             zoom={zoom}
             onElementSelect={handleElementSelect}
             isSelectionMode={isSelectionMode}
-            onSelectionModeChange={setIsSelectionMode}
+            onSelectionModeChange={toggleSelectionMode}
           />
           <div className="fixed bottom-4 right-4 flex gap-2">
             <NavigationControls />
             <ZoomControls zoom={zoom} onZoomChange={setZoom} />
           </div>
 
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button 
-                className="fixed bottom-4 left-4"
-                variant="secondary"
-              >
-                Selected Elements
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-96">
-              <SheetHeader>
-                <SheetTitle>Selected Elements</SheetTitle>
-              </SheetHeader>
-              <ElementSelector 
-                selectedElement={selectedElement} 
-                url={url}
-                onSelectionStart={() => setIsSelectionMode(true)}
-              />
-            </SheetContent>
-          </Sheet>
+          <ElementSelector 
+            selectedElement={selectedElement} 
+            url={url}
+            onSelectionStart={() => setIsSelectionMode(true)}
+          />
         </div>
       </div>
     </div>
