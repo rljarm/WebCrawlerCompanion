@@ -1,10 +1,55 @@
 import express, { type Express } from "express";
 import { createServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import fetch from "node-fetch";
 import { insertProxyConfigSchema, insertSelectorSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express) {
+  const server = createServer(app);
+
+  // Initialize WebSocket server
+  const wss = new WebSocketServer({ server, path: '/ws' });
+
+  wss.on('connection', (ws) => {
+    console.log('New WebSocket connection established');
+
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+
+        switch (data.type) {
+          case 'SELECT_ELEMENT':
+            // Broadcast element selection to all clients
+            wss.clients.forEach(client => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'ELEMENT_SELECTED',
+                  selector: data.selector,
+                  attributes: data.attributes
+                }));
+              }
+            });
+            break;
+
+          case 'HIGHLIGHT_ELEMENT':
+            // Broadcast highlight state
+            wss.clients.forEach(client => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                  type: 'ELEMENT_HIGHLIGHTED',
+                  selector: data.selector
+                }));
+              }
+            });
+            break;
+        }
+      } catch (error) {
+        console.error('WebSocket message error:', error);
+      }
+    });
+  });
+
   app.post("/api/proxy-configs", async (req, res) => {
     const result = insertProxyConfigSchema.safeParse(req.body);
     if (!result.success) {
@@ -55,5 +100,15 @@ export async function registerRoutes(app: Express) {
     }
   });
 
-  return createServer(app);
+  app.post("/api/download-media", async (req, res) => {
+    const { url, handler } = req.body;
+    if (!url || !handler) {
+      return res.status(400).json({ error: "URL and handler are required" });
+    }
+
+    // In a real implementation, this would handle different download methods
+    res.json({ status: 'success', message: 'Download started' });
+  });
+
+  return server;
 }

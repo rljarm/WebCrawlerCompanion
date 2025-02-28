@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiCurseforge } from "react-icons/si";
-import { Eye, Download } from "lucide-react";
+import { Eye, List } from "lucide-react";
+import { useWebSocket } from "@/hooks/use-websocket";
 
 interface DOMViewerProps {
   content: string;
@@ -13,11 +14,28 @@ interface DOMViewerProps {
 
 export default function DOMViewer({ content, zoom, onElementSelect, isSelectionMode, onSelectionModeChange }: DOMViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [isMultiSelect, setIsMultiSelect] = useState(false);
-  const [selectedHTML, setSelectedHTML] = useState<string>("");
   const [previewElement, setPreviewElement] = useState<HTMLElement | null>(null);
   const contentRef = useRef(content);
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
+  const { send, subscribe } = useWebSocket();
+
+  useEffect(() => {
+    subscribe((data) => {
+      if (data.type === 'ELEMENT_HIGHLIGHTED' && iframeRef.current?.contentDocument) {
+        const element = iframeRef.current.contentDocument.querySelector(data.selector);
+        if (element) {
+          removeAllHighlights();
+          element.classList.add('highlight-target');
+        }
+      }
+    });
+  }, [subscribe]);
+
+  const removeAllHighlights = () => {
+    if (!iframeRef.current?.contentDocument) return;
+    const highlights = iframeRef.current.contentDocument.querySelectorAll('.highlight-target');
+    highlights.forEach(el => el.classList.remove('highlight-target'));
+  };
 
   useEffect(() => {
     contentRef.current = content;
@@ -98,24 +116,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
     doc.body.classList.toggle('selectable', isSelectionMode);
 
-    const handleMouseOver = (e: MouseEvent) => {
-      if (!isSelectionMode) return;
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
-        target.classList.add('highlight-target');
-      }
-    };
-
-    const handleMouseOut = (e: MouseEvent) => {
-      if (!isSelectionMode) return;
-      const target = e.target as HTMLElement;
-      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
-        target.classList.remove('highlight-target');
-      }
-    };
-
     const handleClick = (e: MouseEvent) => {
       if (!isSelectionMode) return;
       e.preventDefault();
@@ -124,29 +124,33 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      target.classList.remove('highlight-target');
+      // Keep the highlight
+      removeAllHighlights();
+      target.classList.add('highlight-target');
       setPreviewElement(target);
+
+      // Notify other clients about the highlight
+      send('HIGHLIGHT_ELEMENT', { selector: generateSelector(target) });
     };
 
-    doc.addEventListener('mouseover', handleMouseOver);
-    doc.addEventListener('mouseout', handleMouseOut);
     doc.addEventListener('click', handleClick);
     doc.addEventListener('contextmenu', (e) => e.preventDefault());
 
     return () => {
-      doc.removeEventListener('mouseover', handleMouseOver);
-      doc.removeEventListener('mouseout', handleMouseOut);
       doc.removeEventListener('click', handleClick);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, isIframeLoaded]);
+  }, [isSelectionMode, isIframeLoaded, send]);
 
   const handleConfirmSelection = () => {
     if (!previewElement) return;
-
     const selector = generateSelector(previewElement);
-    onElementSelect(selector, isMultiSelect);
-    setSelectedHTML(previewElement.outerHTML);
+    onElementSelect(selector, false);
+    send('SELECT_ELEMENT', { 
+      selector,
+      attributes: ['text'],
+      data: { text: previewElement.textContent || '' }
+    });
     setPreviewElement(null);
   };
 
