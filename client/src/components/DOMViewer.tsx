@@ -21,7 +21,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
   useEffect(() => {
     contentRef.current = content;
-    // Only rewrite content when it actually changes
     if (content && iframeRef.current) {
       const doc = iframeRef.current.contentDocument;
       if (doc) {
@@ -49,16 +48,19 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
                   cursor: crosshair !important; 
                 }
                 .highlight-target { 
-                  outline: 2px solid #2563eb !important;
-                  background: rgba(37, 99, 235, 0.1) !important;
+                  outline: 2px solid #007BFF !important;
+                  background: rgba(0, 123, 255, 0.1) !important;
+                  box-shadow: 0 0 15px #ADD8E6 !important;
                 }
                 .preview-element {
-                  outline: 3px solid #eab308 !important;
-                  background: rgba(234, 179, 8, 0.1) !important;
+                  outline: 3px solid #007BFF !important;
+                  background: rgba(0, 123, 255, 0.1) !important;
+                  box-shadow: 0 0 20px #ADD8E6 !important;
                 }
                 .selected-element {
-                  outline: 3px solid #16a34a !important;
-                  background: rgba(22, 163, 74, 0.1) !important;
+                  outline: 3px solid #007BFF !important;
+                  background: rgba(0, 123, 255, 0.1) !important;
+                  box-shadow: 0 0 20px #ADD8E6 !important;
                 }
               </style>
             </head>
@@ -91,10 +93,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const doc = iframe.contentDocument;
     if (!doc) return;
 
-    // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectionMode);
 
-    // Add event listeners
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectionMode) return;
       const target = e.target as HTMLElement;
@@ -121,7 +121,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Remove highlight
       target.classList.remove('highlight-target');
       setPreviewElement(target);
     };
@@ -167,6 +166,12 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
           <Button
             onClick={() => onSelectionModeChange(!isSelectionMode)}
             variant={isSelectionMode ? "destructive" : "default"}
+            className={`
+              bg-black border-2 border-[#007BFF] text-[#007BFF]
+              hover:text-[#ADD8E6] hover:border-[#ADD8E6]
+              shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF]
+              transition-all duration-300
+            `}
           >
             <SiCurseforge className="mr-2 h-4 w-4" />
             {isSelectionMode ? "Cancel Selection" : "Select Element"}
@@ -175,6 +180,12 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
             <Button
               onClick={handleConfirmSelection}
               variant="secondary"
+              className={`
+                bg-black border-2 border-[#007BFF] text-[#007BFF]
+                hover:text-[#ADD8E6] hover:border-[#ADD8E6]
+                shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF]
+                transition-all duration-300
+              `}
             >
               <Eye className="mr-2 h-4 w-4" />
               Preview Selection
@@ -182,7 +193,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
           )}
         </div>
         {isSelectionMode && (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-[#007BFF]">
             {window.matchMedia('(hover: none)').matches
               ? "Long press any element to select it"
               : "Click any element to select it"}
@@ -190,12 +201,12 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         )}
       </div>
 
-      <div className="w-full h-[calc(100vh-8rem)] overflow-auto bg-white">
+      <div className="w-full h-[calc(100vh-8rem)] overflow-auto bg-black">
         <iframe
           ref={iframeRef}
-          className="w-full h-full border-0"
+          className="w-full h-full border-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6]"
           sandbox="allow-same-origin allow-scripts"
-          style={{ width: '100%', height: '100%' }}
+          style={{ width: '100%', height: '100%', transform: `scale(${zoom})`, transformOrigin: 'top left' }}
           title="DOM Preview"
         />
       </div>

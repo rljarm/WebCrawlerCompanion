@@ -141,23 +141,30 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   };
 
   return (
-    <div className="fixed bottom-4 left-4 flex flex-col gap-2">
+    <div className="fixed top-20 right-4 flex flex-col gap-2 max-h-[calc(100vh-6rem)] overflow-y-auto">
       {selectedSelectors.map((selector, index) => (
         <div
           key={index}
-          className="flex items-center gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-full shadow-lg p-2"
+          className="flex items-center gap-2 bg-black border-2 border-[#007BFF] rounded-[25%] shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF] transition-all duration-300 p-2"
+          style={{
+            animation: "glow 1.5s ease-in-out infinite alternate"
+          }}
         >
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56">
+            <DropdownMenuContent align="start" className="w-56 bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
               {ALL_ATTRIBUTES.map(category => (
                 <DropdownMenuItem
                   key={category.category}
-                  className="flex items-center"
+                  className="flex items-center text-[#007BFF] hover:text-[#ADD8E6] hover:bg-black/50"
                 >
                   {category.category}
                 </DropdownMenuItem>
@@ -166,7 +173,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           </DropdownMenu>
 
           <div
-            className="px-3 py-1 cursor-pointer"
+            className="px-3 py-1 cursor-pointer text-white hover:text-[#ADD8E6] transition-colors"
             onClick={() => handleShowHtml(selector)}
           >
             <span className="truncate max-w-[200px]">
@@ -176,15 +183,20 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
+              >
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
               {ACTIONS.map(action => (
                 <DropdownMenuItem
                   key={action.value}
                   onSelect={() => handleAction(action.value, selector)}
+                  className="text-[#007BFF] hover:text-[#ADD8E6] hover:bg-black/50"
                 >
                   {action.label}
                 </DropdownMenuItem>
@@ -195,7 +207,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+            className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] rounded-full transition-colors"
             onClick={() => handleRemoveSelector(selector)}
           >
             <X className="h-4 w-4" />
@@ -203,10 +215,21 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         </div>
       ))}
 
+      <style jsx global>{`
+        @keyframes glow {
+          from {
+            box-shadow: 0 0 15px #ADD8E6;
+          }
+          to {
+            box-shadow: 0 0 20px #007BFF;
+          }
+        }
+      `}</style>
+
       <Dialog open={isHtmlDialogOpen} onOpenChange={setIsHtmlDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl bg-black border-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
           <DialogHeader>
-            <DialogTitle className="flex items-center justify-between">
+            <DialogTitle className="flex items-center justify-between text-[#007BFF]">
               <span>Selected Element HTML</span>
               <div className="flex gap-2">
                 <Button
@@ -214,6 +237,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
                   size="sm"
                   onClick={() => navigateDOM('up')}
                   disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
+                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
                 >
                   <ChevronUp className="h-4 w-4" />
                 </Button>
@@ -222,6 +246,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
                   size="sm"
                   onClick={() => navigateDOM('down')}
                   disabled={!currentElement?.firstElementChild}
+                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
                 >
                   <ChevronDown className="h-4 w-4" />
                 </Button>
@@ -230,6 +255,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
                   size="sm"
                   onClick={expandToRoot}
                   disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
+                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
                 >
                   <ArrowUpToLine className="h-4 w-4" />
                 </Button>
@@ -237,7 +263,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
             </DialogTitle>
           </DialogHeader>
           <pre
-            className="bg-muted p-4 rounded-lg overflow-x-auto"
+            className="bg-black text-white p-4 rounded-lg overflow-x-auto border border-[#007BFF]"
             onClick={handleHtmlClick}
           >
             <code dangerouslySetInnerHTML={{ __html: formatHtml(selectedHtml) }} />
