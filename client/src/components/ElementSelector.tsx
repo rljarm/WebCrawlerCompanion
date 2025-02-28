@@ -49,62 +49,66 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   const [lastSuccessfulDownloader, setLastSuccessfulDownloader] = useState<string | null>(null);
 
   useEffect(() => {
-    if (selectedElement) {
-      const iframe = document.querySelector('iframe');
-      if (iframe?.contentDocument) {
-        const element = iframe.contentDocument.querySelector(selectedElement);
-        if (element) {
-          // Get all available attributes
-          const availableAttributes = Array.from(element.attributes)
-            .map(attr => attr.name)
-            .filter(attr => attr !== 'class' && attr !== 'style');
+    if (!selectedElement) return;
 
-          // Always include text if element has text content
-          if (element.textContent?.trim()) {
-            availableAttributes.unshift('text');
-          }
+    const iframe = document.querySelector('iframe');
+    if (!iframe?.contentDocument) return;
 
-          // Detect media type
-          let mediaType;
-          if (element instanceof HTMLVideoElement || element.querySelector('video')) {
-            mediaType = 'video';
-          } else if (element instanceof HTMLAudioElement || element.querySelector('audio')) {
-            mediaType = 'audio';
-          } else if (element instanceof HTMLImageElement || element.querySelector('img')) {
-            mediaType = 'image';
-          }
+    const element = iframe.contentDocument.querySelector(selectedElement);
+    if (!element) return;
 
-          const initialData: Record<string, string> = {
-            text: element.textContent?.trim() || ''
-          };
+    // Don't add duplicate selectors
+    if (selectedSelectors.some(s => s.selector === selectedElement)) return;
 
-          // Add first three attributes by default
-          const defaultAttributes = ['text'];
-          availableAttributes.slice(0, 2).forEach(attr => {
-            if (attr !== 'text') {
-              defaultAttributes.push(attr);
-              initialData[attr] = (element as HTMLElement).getAttribute(attr) || '';
-            }
-          });
+    // Get all available attributes
+    const availableAttributes = Array.from(element.attributes)
+      .map(attr => attr.name)
+      .filter(attr => attr !== 'class' && attr !== 'style');
 
-          const newSelector: SelectedSelector = {
-            selector: selectedElement,
-            attributes: defaultAttributes,
-            extractedData: initialData,
-            mediaType,
-            availableAttributes
-          };
+    // Always include text if element has text content
+    const textContent = element.textContent?.trim();
+    if (textContent) {
+      availableAttributes.unshift('text');
+    }
 
-          setSelectedSelectors(prev => {
-            const exists = prev.some(s => s.selector === selectedElement);
-            if (!exists) {
-              return [...prev, newSelector];
-            }
-            return prev;
-          });
+    // Detect media type
+    let mediaType;
+    if (element instanceof HTMLVideoElement || element.querySelector('video')) {
+      mediaType = 'video';
+    } else if (element instanceof HTMLAudioElement || element.querySelector('audio')) {
+      mediaType = 'audio';
+    } else if (element instanceof HTMLImageElement || element.querySelector('img')) {
+      mediaType = 'image';
+    } else if (element instanceof HTMLAnchorElement && element.href?.match(/\.(mp4|webm|ogg|mp3|wav)$/i)) {
+      mediaType = element.href.match(/\.(mp4|webm|ogg)$/i) ? 'video' : 'audio';
+    }
+
+    // Initialize extracted data with text content
+    const extractedData: Record<string, string> = {};
+    if (textContent) {
+      extractedData.text = textContent;
+    }
+
+    // Add values for available attributes
+    availableAttributes.forEach(attr => {
+      if (attr !== 'text') {
+        const value = element.getAttribute(attr);
+        if (value) {
+          extractedData[attr] = value;
         }
       }
-    }
+    });
+
+    // Create new selector with detected attributes
+    const newSelector: SelectedSelector = {
+      selector: selectedElement,
+      attributes: Object.keys(extractedData),
+      extractedData,
+      mediaType,
+      availableAttributes
+    };
+
+    setSelectedSelectors(prev => [...prev, newSelector]);
   }, [selectedElement]);
 
   const handleAttributeDialogOpen = (selector: string) => {
@@ -118,35 +122,34 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     setSelectedSelectors(prev => prev.map(s => {
       if (s.selector === currentSelector) {
         const iframe = document.querySelector('iframe');
-        if (iframe?.contentDocument) {
-          const element = iframe.contentDocument.querySelector(s.selector);
-          if (element) {
-            let value = '';
-            if (attribute === 'text') {
-              value = element.textContent || '';
-            } else {
-              value = (element as HTMLElement).getAttribute(attribute) || '';
-            }
+        if (!iframe?.contentDocument) return s;
 
-            const newAttributes = s.attributes.includes(attribute)
-              ? s.attributes.filter(a => a !== attribute)
-              : [...s.attributes, attribute];
+        const element = iframe.contentDocument.querySelector(s.selector);
+        if (!element) return s;
 
-            const newData = { ...s.extractedData };
-            if (newAttributes.includes(attribute)) {
-              newData[attribute] = value;
-            } else {
-              delete newData[attribute];
-            }
-
-            return {
-              ...s,
-              attributes: newAttributes,
-              extractedData: newData
-            };
-          }
+        let value = '';
+        if (attribute === 'text') {
+          value = element.textContent?.trim() || '';
+        } else {
+          value = element.getAttribute(attribute) || '';
         }
-        return s;
+
+        const newAttributes = s.attributes.includes(attribute)
+          ? s.attributes.filter(a => a !== attribute)
+          : [...s.attributes, attribute];
+
+        const newData = { ...s.extractedData };
+        if (newAttributes.includes(attribute)) {
+          newData[attribute] = value;
+        } else {
+          delete newData[attribute];
+        }
+
+        return {
+          ...s,
+          attributes: newAttributes,
+          extractedData: newData
+        };
       }
       return s;
     }));
@@ -156,30 +159,30 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     if (!customAttribute || !currentSelector) return;
 
     const iframe = document.querySelector('iframe');
-    if (iframe?.contentDocument) {
-      const element = iframe.contentDocument.querySelector(currentSelector);
-      if (element) {
-        const value = (element as HTMLElement).getAttribute(customAttribute) || '';
+    if (!iframe?.contentDocument) return;
 
-        setSelectedSelectors(prev => prev.map(s => {
-          if (s.selector === currentSelector) {
-            return {
-              ...s,
-              attributes: [...s.attributes, customAttribute],
-              extractedData: {
-                ...s.extractedData,
-                [customAttribute]: value
-              },
-              availableAttributes: [...s.availableAttributes, customAttribute]
-            };
-          }
-          return s;
-        }));
+    const element = iframe.contentDocument.querySelector(currentSelector);
+    if (!element) return;
 
-        setCustomAttribute("");
-        toast({ title: "Success", description: "Custom attribute added" });
+    const value = element.getAttribute(customAttribute) || '';
+
+    setSelectedSelectors(prev => prev.map(s => {
+      if (s.selector === currentSelector) {
+        return {
+          ...s,
+          attributes: [...s.attributes, customAttribute],
+          extractedData: {
+            ...s.extractedData,
+            [customAttribute]: value
+          },
+          availableAttributes: [...s.availableAttributes, customAttribute]
+        };
       }
-    }
+      return s;
+    }));
+
+    setCustomAttribute("");
+    toast({ title: "Success", description: "Custom attribute added" });
   };
 
   const handleMediaDownload = async (selector: string, handler: string) => {
@@ -299,7 +302,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           </DialogHeader>
 
           <div className="space-y-4">
-            {currentSelector && (
+            {currentSelector && selectedSelectors.find(s => s.selector === currentSelector) && (
               <>
                 <div className="space-y-2">
                   <h4 className="text-[#ADD8E6] font-medium">Available Attributes</h4>

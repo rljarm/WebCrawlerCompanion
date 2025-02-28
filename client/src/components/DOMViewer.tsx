@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiCurseforge } from "react-icons/si";
-import { Eye, List } from "lucide-react";
+import { List } from "lucide-react";
 import { useWebSocket } from "@/hooks/use-websocket";
 
 interface DOMViewerProps {
@@ -14,10 +14,10 @@ interface DOMViewerProps {
 
 export default function DOMViewer({ content, zoom, onElementSelect, isSelectionMode, onSelectionModeChange }: DOMViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [previewElement, setPreviewElement] = useState<HTMLElement | null>(null);
   const contentRef = useRef(content);
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
   const { send, subscribe, isConnected } = useWebSocket();
+  const [isProcessingSelection, setIsProcessingSelection] = useState(false);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -82,11 +82,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
                   background: rgba(0, 123, 255, 0.1) !important;
                   box-shadow: 0 0 15px #ADD8E6 !important;
                 }
-                .preview-element {
-                  outline: 3px solid #007BFF !important;
-                  background: rgba(0, 123, 255, 0.1) !important;
-                  box-shadow: 0 0 20px #ADD8E6 !important;
-                }
                 .selected-element {
                   outline: 3px solid #007BFF !important;
                   background: rgba(0, 123, 255, 0.1) !important;
@@ -128,30 +123,32 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
     doc.body.classList.toggle('selectable', isSelectionMode);
 
-    const handleClick = (e: MouseEvent) => {
-      if (!isSelectionMode) return;
+    const handleClick = async (e: MouseEvent) => {
+      if (!isSelectionMode || isProcessingSelection) return;
       e.preventDefault();
       e.stopPropagation();
 
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Keep the highlight and immediately select the element
-      removeAllHighlights();
-      target.classList.add('selected-element');
+      setIsProcessingSelection(true);
+      try {
+        removeAllHighlights();
+        target.classList.add('selected-element');
 
-      const selector = generateSelector(target);
-      onElementSelect(selector, false);
+        const selector = generateSelector(target);
+        onElementSelect(selector, false);
 
-      if (isConnected) {
-        send('SELECT_ELEMENT', { 
-          selector,
-          attributes: ['text'],
-          data: { text: target.textContent || '' }
-        });
+        if (isConnected) {
+          await send('SELECT_ELEMENT', { 
+            selector,
+            attributes: ['text'],
+            data: { text: target.textContent || '' }
+          });
+        }
+      } finally {
+        setIsProcessingSelection(false);
       }
-
-      setPreviewElement(null);
     };
 
     doc.addEventListener('click', handleClick);
@@ -161,7 +158,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       doc.removeEventListener('click', handleClick);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect]);
+  }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect, isProcessingSelection]);
 
   const generateSelector = (element: HTMLElement): string => {
     let selector = element.tagName.toLowerCase();
@@ -169,7 +166,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       selector += `#${element.id}`;
     } else if (element.classList.length > 0) {
       selector += `.${Array.from(element.classList)
-        .filter(c => !['highlight-target', 'preview-element', 'selected-element', 'selectable'].includes(c))
+        .filter(c => !['highlight-target', 'selected-element', 'selectable'].includes(c))
         .join('.')}`;
     }
     return selector;
