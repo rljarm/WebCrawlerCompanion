@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { SiCurseforge } from "react-icons/si";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown } from "lucide-react";
 
 interface DOMViewerProps {
   content: string;
@@ -33,13 +25,19 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const doc = iframe.contentDocument;
     if (!doc) return;
 
+    // Store scroll position before writing content
+    const scrollPosition = {
+      x: iframe.contentWindow?.scrollX || 0,
+      y: iframe.contentWindow?.scrollY || 0
+    };
+
     // Write content and wait for load
     doc.open();
     doc.write(`
       <!DOCTYPE html>
       <html>
         <head>
-          <base href="https://en.wikipedia.org" />
+          <base href="https://en.wikipedia.org/" />
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
@@ -62,56 +60,36 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
               background: rgba(22, 163, 74, 0.1) !important;
               transition: outline 0.15s ease, background 0.15s ease !important;
             }
+            img {
+              display: inline-block;
+              max-width: 100%;
+              height: auto;
+            }
           </style>
         </head>
         <body>
           ${content}
+          <script>
+            // Prevent link navigation
+            document.addEventListener('click', function(e) {
+              if (e.target.tagName === 'A') {
+                e.preventDefault();
+              }
+            }, true);
+          </script>
         </body>
       </html>
     `);
     doc.close();
 
-    // Store iframe scroll position
-    let scrollX = 0;
-    let scrollY = 0;
-
-    const handleScroll = () => {
-      scrollX = iframe.contentWindow?.scrollX || 0;
-      scrollY = iframe.contentWindow?.scrollY || 0;
-    };
-
+    // Restore scroll position after content is loaded
     const restoreScroll = () => {
       if (iframe.contentWindow) {
-        iframe.contentWindow.scrollTo(scrollX, scrollY);
+        iframe.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
       }
     };
 
-    const handleElementSelect = (element: HTMLElement) => {
-      if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
-
-      // Remove previous highlights
-      doc.querySelectorAll('.highlight-target').forEach(el => {
-        el.classList.remove('highlight-target');
-      });
-
-      // If not in multi-select mode, clear previous selections
-      if (!isMultiSelect) {
-        doc.querySelectorAll('.selected-element').forEach(el => {
-          el.classList.remove('selected-element');
-        });
-      }
-
-      // Add new selection
-      element.classList.remove('highlight-target');
-      element.classList.add('selected-element');
-
-      const selector = generateSelector(element);
-      onElementSelect(selector, isMultiSelect);
-      setSelectedHTML(element.outerHTML);
-
-      // Restore scroll position
-      restoreScroll();
-    };
+    iframe.addEventListener('load', restoreScroll);
 
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectionMode || isPressingRef.current) return;
@@ -135,7 +113,21 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       if (!isSelectionMode) return;
       e.preventDefault();
       e.stopPropagation();
-      handleElementSelect(e.target as HTMLElement);
+
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      // Remove highlight
+      target.classList.remove('highlight-target');
+      // Add selection
+      target.classList.add('selected-element');
+
+      const selector = generateSelector(target);
+      onElementSelect(selector, isMultiSelect);
+      setSelectedHTML(target.outerHTML);
+
+      // Restore scroll position
+      restoreScroll();
     };
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -155,13 +147,12 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         if (pressTargetRef.current === target) {
           e.preventDefault();
           e.stopPropagation();
-          handleElementSelect(target);
+          handleClick(new MouseEvent('click', { bubbles: true, cancelable: true }));
         }
       }, 500);
     };
 
     // Add event listeners
-    doc.addEventListener('scroll', handleScroll);
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
@@ -175,8 +166,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       if (pressTimerRef.current) {
         clearTimeout(pressTimerRef.current);
       }
+      iframe.removeEventListener('load', restoreScroll);
       // Clean up event listeners
-      doc.removeEventListener('scroll', handleScroll);
       doc.removeEventListener('mouseover', handleMouseOver, true);
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
@@ -264,7 +255,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         <iframe
           ref={iframeRef}
           className="w-full h-full border-0"
-          sandbox="allow-same-origin allow-scripts allow-popups"
+          sandbox="allow-same-origin allow-scripts"
           style={{ width: '100%', height: '100%' }}
           title="DOM Preview"
         />
