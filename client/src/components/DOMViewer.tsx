@@ -17,7 +17,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const contentRef = useRef(content);
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
   const { send, subscribe, isConnected } = useWebSocket();
-  const [isProcessingSelection, setIsProcessingSelection] = useState(false);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -116,46 +115,40 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
     doc.body.classList.toggle('selectable', isSelectionMode);
 
-    const handleClick = async (e: MouseEvent) => {
-      // Prevent default immediately in selection mode
-      if (isSelectionMode) {
-        e.preventDefault();
-        e.stopPropagation();
+    const handleClick = (e: MouseEvent) => {
+      if (!isSelectionMode) return;
 
-        if (isProcessingSelection) return;
+      e.preventDefault();
+      e.stopPropagation();
 
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+      const target = e.target as HTMLElement;
+      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-        setIsProcessingSelection(true);
-        try {
-          removeAllHighlights();
-          target.classList.add('selected-element');
+      removeAllHighlights();
+      target.classList.add('selected-element');
 
-          const selector = generateSelector(target);
-          onElementSelect(selector, false);
+      const selector = generateSelector(target);
+      onElementSelect(selector, false);
 
-          if (isConnected) {
-            // Include href for links
-            const data: any = { text: target.textContent || '' };
-            if (target instanceof HTMLAnchorElement) {
-              data.href = target.href;
-            }
+      if (isConnected) {
+        const data: Record<string, string> = {
+          text: target.textContent?.trim() || ''
+        };
 
-            await send('SELECT_ELEMENT', { 
-              selector,
-              attributes: Object.keys(data),
-              data
-            });
-          }
-        } finally {
-          setIsProcessingSelection(false);
+        if (target instanceof HTMLAnchorElement) {
+          data.href = target.href;
         }
+
+        send('SELECT_ELEMENT', { 
+          selector,
+          attributes: Object.keys(data),
+          data
+        });
       }
     };
 
-    // Prevent link navigation in selection mode
-    const handleLinkClick = (e: MouseEvent) => {
+    // Prevent any link navigation in selection mode
+    const preventNavigation = (e: MouseEvent) => {
       if (isSelectionMode && (e.target as HTMLElement).closest('a')) {
         e.preventDefault();
         e.stopPropagation();
@@ -163,15 +156,15 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     };
 
     doc.addEventListener('click', handleClick);
-    doc.addEventListener('click', handleLinkClick, true); // Use capture phase
+    doc.addEventListener('click', preventNavigation, true);
     doc.addEventListener('contextmenu', (e) => e.preventDefault());
 
     return () => {
       doc.removeEventListener('click', handleClick);
-      doc.removeEventListener('click', handleLinkClick, true);
+      doc.removeEventListener('click', preventNavigation, true);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect, isProcessingSelection]);
+  }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect]);
 
   const generateSelector = (element: HTMLElement): string => {
     let selector = element.tagName.toLowerCase();
