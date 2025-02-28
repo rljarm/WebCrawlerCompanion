@@ -94,14 +94,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
             </head>
             <body>
               ${contentRef.current}
-              <script>
-                document.addEventListener('click', function(e) {
-                  // Only prevent default behavior in selection mode
-                  if (document.body.classList.contains('selectable')) {
-                    e.preventDefault();
-                  }
-                });
-              </script>
             </body>
           </html>
         `);
@@ -127,40 +119,37 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const handleClick = async (e: MouseEvent) => {
       const target = e.target as HTMLElement;
 
-      // If not in selection mode and it's a link, let it work normally
-      if (!isSelectionMode) {
-        return;
-      }
+      if (isSelectionMode) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      if (isProcessingSelection) return;
-      e.preventDefault();
-      e.stopPropagation();
+        if (isProcessingSelection) return;
+        if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+        setIsProcessingSelection(true);
+        try {
+          removeAllHighlights();
+          target.classList.add('selected-element');
 
-      setIsProcessingSelection(true);
-      try {
-        removeAllHighlights();
-        target.classList.add('selected-element');
+          const selector = generateSelector(target);
+          onElementSelect(selector, false);
 
-        const selector = generateSelector(target);
-        onElementSelect(selector, false);
+          if (isConnected) {
+            // Include href for links
+            const data: any = { text: target.textContent || '' };
+            if (target instanceof HTMLAnchorElement) {
+              data.href = target.href;
+            }
 
-        if (isConnected) {
-          // Include href for links
-          const data: any = { text: target.textContent || '' };
-          if (target instanceof HTMLAnchorElement) {
-            data.href = target.href;
+            await send('SELECT_ELEMENT', { 
+              selector,
+              attributes: Object.keys(data),
+              data
+            });
           }
-
-          await send('SELECT_ELEMENT', { 
-            selector,
-            attributes: Object.keys(data),
-            data
-          });
+        } finally {
+          setIsProcessingSelection(false);
         }
-      } finally {
-        setIsProcessingSelection(false);
       }
     };
 

@@ -49,6 +49,24 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   const [lastSuccessfulDownloader, setLastSuccessfulDownloader] = useState<string | null>(null);
 
   useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @keyframes glow {
+        from {
+          box-shadow: 0 0 15px #ADD8E6;
+        }
+        to {
+          box-shadow: 0 0 20px #007BFF;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!selectedElement) return;
 
     const iframe = document.querySelector('iframe');
@@ -382,17 +400,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           </div>
         </DialogContent>
       </Dialog>
-
-      <style jsx global>{`
-        @keyframes glow {
-          from {
-            box-shadow: 0 0 15px #ADD8E6;
-          }
-          to {
-            box-shadow: 0 0 20px #007BFF;
-          }
-        }
-      `}</style>
     </div>
   );
 }
