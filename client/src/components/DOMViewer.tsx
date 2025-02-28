@@ -117,13 +117,14 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     doc.body.classList.toggle('selectable', isSelectionMode);
 
     const handleClick = async (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-
+      // Prevent default immediately in selection mode
       if (isSelectionMode) {
         e.preventDefault();
         e.stopPropagation();
 
         if (isProcessingSelection) return;
+
+        const target = e.target as HTMLElement;
         if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
         setIsProcessingSelection(true);
@@ -153,11 +154,21 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       }
     };
 
+    // Prevent link navigation in selection mode
+    const handleLinkClick = (e: MouseEvent) => {
+      if (isSelectionMode && (e.target as HTMLElement).closest('a')) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
     doc.addEventListener('click', handleClick);
+    doc.addEventListener('click', handleLinkClick, true); // Use capture phase
     doc.addEventListener('contextmenu', (e) => e.preventDefault());
 
     return () => {
       doc.removeEventListener('click', handleClick);
+      doc.removeEventListener('click', handleLinkClick, true);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
   }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect, isProcessingSelection]);
