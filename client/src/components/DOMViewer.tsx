@@ -96,7 +96,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
               ${contentRef.current}
               <script>
                 document.addEventListener('click', function(e) {
-                  if (e.target.tagName === 'A') {
+                  // Only prevent default behavior in selection mode
+                  if (document.body.classList.contains('selectable')) {
                     e.preventDefault();
                   }
                 });
@@ -124,11 +125,17 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     doc.body.classList.toggle('selectable', isSelectionMode);
 
     const handleClick = async (e: MouseEvent) => {
-      if (!isSelectionMode || isProcessingSelection) return;
+      const target = e.target as HTMLElement;
+
+      // If not in selection mode and it's a link, let it work normally
+      if (!isSelectionMode) {
+        return;
+      }
+
+      if (isProcessingSelection) return;
       e.preventDefault();
       e.stopPropagation();
 
-      const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
       setIsProcessingSelection(true);
@@ -140,10 +147,16 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         onElementSelect(selector, false);
 
         if (isConnected) {
+          // Include href for links
+          const data: any = { text: target.textContent || '' };
+          if (target instanceof HTMLAnchorElement) {
+            data.href = target.href;
+          }
+
           await send('SELECT_ELEMENT', { 
             selector,
-            attributes: ['text'],
-            data: { text: target.textContent || '' }
+            attributes: Object.keys(data),
+            data
           });
         }
       } finally {
