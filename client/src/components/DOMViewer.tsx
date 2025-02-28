@@ -19,6 +19,44 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const pressTargetRef = useRef<HTMLElement | null>(null);
   const isPressingRef = useRef(false);
 
+  const handleElementSelect = (element: HTMLElement) => {
+    if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
+
+    // Store current scroll position
+    const scrollPosition = {
+      x: iframeRef.current?.contentWindow?.scrollX || 0,
+      y: iframeRef.current?.contentWindow?.scrollY || 0
+    };
+
+    // Remove previous highlights
+    const doc = iframeRef.current?.contentDocument;
+    if (!doc) return;
+
+    doc.querySelectorAll('.highlight-target').forEach(el => {
+      el.classList.remove('highlight-target');
+    });
+
+    // If not in multi-select mode, clear previous selections
+    if (!isMultiSelect) {
+      doc.querySelectorAll('.selected-element').forEach(el => {
+        el.classList.remove('selected-element');
+      });
+    }
+
+    // Add new selection
+    element.classList.remove('highlight-target');
+    element.classList.add('selected-element');
+
+    const selector = generateSelector(element);
+    onElementSelect(selector, isMultiSelect);
+    setSelectedHTML(element.outerHTML);
+
+    // Restore scroll position
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
+    }
+  };
+
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !content) return;
@@ -56,30 +94,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     `;
     doc.head.appendChild(style);
 
-    const selectElement = (element: HTMLElement) => {
-      if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
-
-      // Remove previous highlights
-      doc.querySelectorAll('.highlight-target').forEach(el => {
-        el.classList.remove('highlight-target');
-      });
-
-      // If not in multi-select mode, clear previous selections
-      if (!isMultiSelect) {
-        doc.querySelectorAll('.selected-element').forEach(el => {
-          el.classList.remove('selected-element');
-        });
-      }
-
-      // Add new selection
-      element.classList.remove('highlight-target');
-      element.classList.add('selected-element');
-
-      const selector = generateSelector(element);
-      onElementSelect(selector, isMultiSelect);
-      setSelectedHTML(element.outerHTML);
-    };
-
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectionMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
@@ -103,7 +117,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       if (!isSelectionMode) return;
       e.preventDefault();
       e.stopPropagation();
-      selectElement(e.target as HTMLElement);
+      handleElementSelect(e.target as HTMLElement);
     };
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -123,7 +137,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         if (pressTargetRef.current === target) {
           e.preventDefault();
           e.stopPropagation();
-          selectElement(target);
+          handleElementSelect(target);
         }
       }, 500);
     };
@@ -195,7 +209,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       doc.removeEventListener('touchend', handleTouchEnd);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [content, onElementSelect, isSelectionMode, isMultiSelect, onSelectionModeChange]);
+  }, [content, onElementSelect, isSelectionMode, isMultiSelect]);
 
   const generateSelector = (element: HTMLElement): string => {
     const path: string[] = [];
@@ -281,7 +295,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         )}
       </div>
 
-      <div className="w-full h-[600px] overflow-auto bg-white">
+      <div className="w-full h-[calc(100vh-8rem)] overflow-auto bg-white">
         <iframe
           ref={iframeRef}
           className="w-full h-full border-0"

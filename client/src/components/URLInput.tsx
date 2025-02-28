@@ -6,10 +6,11 @@ import { apiRequest } from "@/lib/queryClient";
 
 interface URLInputProps {
   onUrlSubmit: (url: string, content: string) => void;
+  defaultUrl: string;
 }
 
-export default function URLInput({ onUrlSubmit }: URLInputProps) {
-  const [inputUrl, setInputUrl] = useState("");
+export default function URLInput({ onUrlSubmit, defaultUrl }: URLInputProps) {
+  const [inputUrl, setInputUrl] = useState(defaultUrl);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
