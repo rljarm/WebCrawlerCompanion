@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SiCurseforge } from "react-icons/si";
-import { Eye } from "lucide-react";
+import { Eye, Download } from "lucide-react";
 
 interface DOMViewerProps {
   content: string;
@@ -61,6 +61,9 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
                   outline: 3px solid #007BFF !important;
                   background: rgba(0, 123, 255, 0.1) !important;
                   box-shadow: 0 0 20px #ADD8E6 !important;
+                }
+                div {
+                  cursor: pointer !important;
                 }
               </style>
             </head>
@@ -161,25 +164,12 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="flex gap-2">
-          <Button
-            onClick={() => onSelectionModeChange(!isSelectionMode)}
-            variant={isSelectionMode ? "destructive" : "default"}
-            className={`
-              bg-black border-2 border-[#007BFF] text-[#007BFF]
-              hover:text-[#ADD8E6] hover:border-[#ADD8E6]
-              shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF]
-              transition-all duration-300
-            `}
-          >
-            <SiCurseforge className="mr-2 h-4 w-4" />
-            {isSelectionMode ? "Cancel Selection" : "Select Element"}
-          </Button>
-          {previewElement && (
+      <div className="fixed top-0 left-0 right-0 z-10 bg-black border-b-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6] p-4">
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2">
             <Button
-              onClick={handleConfirmSelection}
-              variant="secondary"
+              onClick={() => onSelectionModeChange(!isSelectionMode)}
+              variant={isSelectionMode ? "destructive" : "default"}
               className={`
                 bg-black border-2 border-[#007BFF] text-[#007BFF]
                 hover:text-[#ADD8E6] hover:border-[#ADD8E6]
@@ -187,28 +177,45 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
                 transition-all duration-300
               `}
             >
-              <Eye className="mr-2 h-4 w-4" />
-              Preview Selection
+              <SiCurseforge className="mr-2 h-4 w-4" />
+              {isSelectionMode ? "Cancel Selection" : "Select Element"}
             </Button>
+            {previewElement && (
+              <Button
+                onClick={handleConfirmSelection}
+                variant="secondary"
+                className={`
+                  bg-black border-2 border-[#007BFF] text-[#007BFF]
+                  hover:text-[#ADD8E6] hover:border-[#ADD8E6]
+                  shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF]
+                  transition-all duration-300
+                `}
+              >
+                <Eye className="mr-2 h-4 w-4" />
+                Confirm Selection
+              </Button>
+            )}
+          </div>
+          {isSelectionMode && (
+            <div className="text-sm text-[#007BFF]">
+              {window.matchMedia('(hover: none)').matches
+                ? "Long press any element to select it"
+                : "Click any element to select it"}
+            </div>
           )}
         </div>
-        {isSelectionMode && (
-          <div className="text-sm text-[#007BFF]">
-            {window.matchMedia('(hover: none)').matches
-              ? "Long press any element to select it"
-              : "Click any element to select it"}
-          </div>
-        )}
       </div>
 
-      <div className="w-full h-[calc(100vh-8rem)] overflow-auto bg-black">
-        <iframe
-          ref={iframeRef}
-          className="w-full h-full border-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6]"
-          sandbox="allow-same-origin allow-scripts"
-          style={{ width: '100%', height: '100%', transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-          title="DOM Preview"
-        />
+      <div className="pt-16 w-full h-[calc(100vh-4rem)] bg-black p-4">
+        <div className="w-full h-full border-2 border-[#007BFF] rounded-lg shadow-[0_0_15px_#ADD8E6] overflow-hidden">
+          <iframe
+            ref={iframeRef}
+            className="w-full h-full"
+            sandbox="allow-same-origin allow-scripts"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+            title="DOM Preview"
+          />
+        </div>
       </div>
     </div>
   );

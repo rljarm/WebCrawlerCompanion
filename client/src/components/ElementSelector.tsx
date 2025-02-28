@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, Plus, ChevronUp, ChevronDown, ArrowUpToLine } from "lucide-react";
+import { X, Plus, ChevronUp, ChevronDown, ArrowUpToLine, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 
@@ -16,128 +17,153 @@ interface ElementSelectorProps {
   onSelectionStart: () => void;
 }
 
-// Combine all attributes into a single list
-const ALL_ATTRIBUTES = [
-  { category: "Basic", items: ["text", "href", "src", "alt", "title", "value", "class", "id", "name", "type"] },
-  { category: "Data", items: ["data-src", "data-href", "data-id", "data-url", "data-type", "data-value", "data-title"] },
-  { category: "Media", items: ["src", "poster", "preload", "controls", "autoplay", "loop", "muted", "playsinline"] },
-  { category: "Download", items: ["download", "data-download-url", "data-file-type", "data-file-size", "data-format"] }
+const ATTRIBUTES = {
+  Basic: ["text", "href", "src", "alt", "title", "value"],
+  Data: ["data-src", "data-href", "data-id", "data-url", "data-type"],
+  Media: ["src", "poster", "preload", "controls", "autoplay"],
+  Download: ["download", "data-download-url", "data-file-type"]
+};
+
+const MEDIA_DOWNLOADERS = [
+  { name: "Direct Download", handler: "direct" },
+  { name: "YouTube-DL", handler: "youtube-dl" },
+  { name: "Video Extractor", handler: "video" },
+  { name: "Audio Extractor", handler: "audio" }
 ];
 
-const ACTIONS = [
-  { label: "Follow Link", value: "follow" },
-  { label: "Download Content", value: "download" },
-  { label: "Copy Text", value: "copy" },
-  { label: "Extract Media", value: "media" }
-];
+interface SelectedSelector {
+  selector: string;
+  attributes: string[];
+  extractedData: Record<string, string>;
+  mediaType?: string;
+}
 
 export default function ElementSelector({ selectedElement, url, onSelectionStart }: ElementSelectorProps) {
   const { toast } = useToast();
-  const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
+  const [selectedSelectors, setSelectedSelectors] = useState<SelectedSelector[]>([]);
   const [selectedHtml, setSelectedHtml] = useState<string>("");
   const [isHtmlDialogOpen, setIsHtmlDialogOpen] = useState(false);
   const [currentElement, setCurrentElement] = useState<Element | null>(null);
+  const [lastSuccessfulDownloader, setLastSuccessfulDownloader] = useState<string | null>(null);
 
   useEffect(() => {
     if (selectedElement) {
-      if (!selectedSelectors.includes(selectedElement)) {
-        setSelectedSelectors(prev => [...prev, selectedElement]);
+      const iframe = document.querySelector('iframe');
+      if (iframe?.contentDocument) {
+        const element = iframe.contentDocument.querySelector(selectedElement);
+        if (element) {
+          // Default to text attribute
+          const initialData = { text: element.textContent || '' };
+
+          // Detect media type
+          let mediaType;
+          if (element instanceof HTMLVideoElement || element.querySelector('video')) {
+            mediaType = 'video';
+          } else if (element instanceof HTMLAudioElement || element.querySelector('audio')) {
+            mediaType = 'audio';
+          } else if (element instanceof HTMLImageElement || element.querySelector('img')) {
+            mediaType = 'image';
+          }
+
+          const newSelector: SelectedSelector = {
+            selector: selectedElement,
+            attributes: ['text'],
+            extractedData: initialData,
+            mediaType
+          };
+
+          setSelectedSelectors(prev => {
+            const exists = prev.some(s => s.selector === selectedElement);
+            if (!exists) {
+              return [...prev, newSelector];
+            }
+            return prev;
+          });
+        }
       }
     }
   }, [selectedElement]);
 
-  const handleRemoveSelector = (selector: string) => {
-    setSelectedSelectors(selectedSelectors.filter(s => s !== selector));
-  };
+  const handleAttributeToggle = (selector: string, attribute: string) => {
+    setSelectedSelectors(prev => prev.map(s => {
+      if (s.selector === selector) {
+        const iframe = document.querySelector('iframe');
+        if (iframe?.contentDocument) {
+          const element = iframe.contentDocument.querySelector(selector);
+          if (element) {
+            let value = '';
+            if (attribute === 'text') {
+              value = element.textContent || '';
+            } else {
+              value = (element as HTMLElement).getAttribute(attribute) || '';
+            }
 
-  const handleShowHtml = (selector: string) => {
-    const iframe = document.querySelector('iframe');
-    if (iframe && iframe.contentDocument) {
-      const element = iframe.contentDocument.querySelector(selector);
-      if (element) {
-        setCurrentElement(element);
-        setSelectedHtml(element.outerHTML);
-        setIsHtmlDialogOpen(true);
+            const newAttributes = s.attributes.includes(attribute)
+              ? s.attributes.filter(a => a !== attribute)
+              : [...s.attributes, attribute];
+
+            const newData = { ...s.extractedData };
+            if (newAttributes.includes(attribute)) {
+              newData[attribute] = value;
+            } else {
+              delete newData[attribute];
+            }
+
+            return {
+              ...s,
+              attributes: newAttributes,
+              extractedData: newData
+            };
+          }
+        }
+        return s;
       }
-    }
+      return s;
+    }));
   };
 
-  const handleAction = (action: string, selector: string) => {
+  const handleMediaDownload = async (selector: string, handler: string) => {
     const iframe = document.querySelector('iframe');
     if (!iframe?.contentDocument) return;
 
     const element = iframe.contentDocument.querySelector(selector);
     if (!element) return;
 
-    switch (action) {
-      case 'follow':
-        if (element instanceof HTMLAnchorElement) {
-          window.open(element.href, '_blank');
+    try {
+      let url = '';
+      if (element instanceof HTMLVideoElement || element instanceof HTMLAudioElement) {
+        url = element.src;
+      } else if (element instanceof HTMLAnchorElement) {
+        url = element.href;
+      } else {
+        const mediaElement = element.querySelector('video, audio');
+        if (mediaElement) {
+          url = (mediaElement as HTMLMediaElement).src;
         }
-        break;
-      case 'download':
-        if (element instanceof HTMLImageElement || element instanceof HTMLVideoElement) {
-          const link = document.createElement('a');
-          link.href = element.src;
-          link.download = '';
-          link.click();
-        }
-        break;
-      case 'copy':
-        navigator.clipboard.writeText(element.textContent || '');
-        toast({ title: "Copied", description: "Text copied to clipboard" });
-        break;
-      case 'media':
-        const mediaUrl = element.getAttribute('src') || element.getAttribute('data-src');
-        if (mediaUrl) {
-          window.open(mediaUrl, '_blank');
-        }
-        break;
-    }
-  };
-
-  const navigateDOM = (direction: 'up' | 'down') => {
-    if (!currentElement) return;
-
-    const newElement = direction === 'up'
-      ? currentElement.parentElement
-      : currentElement.firstElementChild;
-
-    if (newElement && newElement.tagName !== 'HTML' && newElement.tagName !== 'BODY') {
-      setCurrentElement(newElement);
-      setSelectedHtml(newElement.outerHTML);
-    }
-  };
-
-  const expandToRoot = () => {
-    if (!currentElement) return;
-    let root = currentElement;
-    while (root.parentElement && root.parentElement.tagName !== 'BODY') {
-      root = root.parentElement;
-    }
-    setCurrentElement(root);
-    setSelectedHtml(root.outerHTML);
-  };
-
-  const handleHtmlClick = (e: React.MouseEvent<HTMLPreElement>) => {
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'SPAN' && target.classList.contains('tag-name')) {
-      const element = currentElement;
-      if (element) {
-        const selector = generateSelector(element as HTMLElement);
-        if (!selectedSelectors.includes(selector)) {
-          setSelectedSelectors(prev => [...prev, selector]);
-        }
-        setIsHtmlDialogOpen(false);
       }
-    }
-  };
 
-  const formatHtml = (html: string) => {
-    return html.replace(
-      /(<\/?[a-z0-9]+)/gi,
-      '<span class="tag-name cursor-pointer hover:text-primary">$1</span>'
-    );
+      if (!url) {
+        toast({ title: "Error", description: "No media URL found" });
+        return;
+      }
+
+      // In a real implementation, this would call your backend API
+      const response = await fetch('/api/download-media', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, handler })
+      });
+
+      if (response.ok) {
+        setLastSuccessfulDownloader(handler);
+        toast({ title: "Success", description: "Media download started" });
+      } else {
+        throw new Error("Download failed");
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      toast({ title: "Error", description: "Failed to download media" });
+    }
   };
 
   return (
@@ -161,54 +187,75 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-56 bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
-              {ALL_ATTRIBUTES.map(category => (
-                <DropdownMenuItem
-                  key={category.category}
-                  className="flex items-center text-[#007BFF] hover:text-[#ADD8E6] hover:bg-black/50"
-                >
-                  {category.category}
-                </DropdownMenuItem>
+              {Object.entries(ATTRIBUTES).map(([category, attrs]) => (
+                <>
+                  <DropdownMenuItem
+                    key={category}
+                    className="text-[#007BFF] font-bold"
+                  >
+                    {category}
+                  </DropdownMenuItem>
+                  {attrs.map(attr => (
+                    <DropdownMenuItem
+                      key={attr}
+                      className={`pl-4 ${
+                        selector.attributes.includes(attr)
+                          ? "text-[#ADD8E6]"
+                          : "text-[#007BFF]"
+                      } hover:text-[#ADD8E6] hover:bg-black/50`}
+                      onClick={() => handleAttributeToggle(selector.selector, attr)}
+                    >
+                      {attr}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                </>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div
-            className="px-3 py-1 cursor-pointer text-white hover:text-[#ADD8E6] transition-colors"
-            onClick={() => handleShowHtml(selector)}
-          >
-            <span className="truncate max-w-[200px]">
-              {selector}
-            </span>
+          <div className="flex-1 px-3 py-1">
+            <div className="text-[#007BFF] font-bold mb-1">{selector.selector}</div>
+            {Object.entries(selector.extractedData).map(([attr, value]) => (
+              <div key={attr} className="text-white text-sm">
+                <span className="text-[#ADD8E6]">{attr}:</span> {value}
+              </div>
+            ))}
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
-              {ACTIONS.map(action => (
-                <DropdownMenuItem
-                  key={action.value}
-                  onSelect={() => handleAction(action.value, selector)}
-                  className="text-[#007BFF] hover:text-[#ADD8E6] hover:bg-black/50"
+          {selector.mediaType && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
                 >
-                  {action.label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                  <Download className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
+                {MEDIA_DOWNLOADERS.map(downloader => (
+                  <DropdownMenuItem
+                    key={downloader.handler}
+                    onClick={() => handleMediaDownload(selector.selector, downloader.handler)}
+                    className={`
+                      text-[#007BFF] hover:text-[#ADD8E6] hover:bg-black/50
+                      ${lastSuccessfulDownloader === downloader.handler ? "text-[#ADD8E6]" : ""}
+                    `}
+                  >
+                    {downloader.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           <Button
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] rounded-full transition-colors"
-            onClick={() => handleRemoveSelector(selector)}
+            onClick={() => setSelectedSelectors(prev => prev.filter(s => s.selector !== selector.selector))}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -225,61 +272,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           }
         }
       `}</style>
-
-      <Dialog open={isHtmlDialogOpen} onOpenChange={setIsHtmlDialogOpen}>
-        <DialogContent className="max-w-3xl bg-black border-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center justify-between text-[#007BFF]">
-              <span>Selected Element HTML</span>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigateDOM('up')}
-                  disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
-                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
-                >
-                  <ChevronUp className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigateDOM('down')}
-                  disabled={!currentElement?.firstElementChild}
-                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
-                >
-                  <ChevronDown className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={expandToRoot}
-                  disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
-                  className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
-                >
-                  <ArrowUpToLine className="h-4 w-4" />
-                </Button>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          <pre
-            className="bg-black text-white p-4 rounded-lg overflow-x-auto border border-[#007BFF]"
-            onClick={handleHtmlClick}
-          >
-            <code dangerouslySetInnerHTML={{ __html: formatHtml(selectedHtml) }} />
-          </pre>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
-
-const generateSelector = (element: HTMLElement): string => {
-  let selector = element.tagName.toLowerCase();
-  if (element.id) {
-    selector += `#${element.id}`;
-  } else if (element.classList.length > 0) {
-    selector += `.${Array.from(element.classList).join('.')}`;
-  }
-  return selector;
-};
