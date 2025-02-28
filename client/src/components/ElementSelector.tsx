@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X } from "lucide-react";
+import { X, ChevronUp, ChevronDown, Maximize, ArrowUpToLine } from "lucide-react";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
@@ -67,6 +67,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
   const [selectedHtml, setSelectedHtml] = useState<string>("");
   const [isHtmlDialogOpen, setIsHtmlDialogOpen] = useState(false);
+  const [currentElement, setCurrentElement] = useState<Element | null>(null);
 
   useEffect(() => {
     if (selectedElement) {
@@ -91,8 +92,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
       setSelectedSelectors([]);
     },
     onError: () => {
-      toast({ 
-        title: "Error", 
+      toast({
+        title: "Error",
         description: "Failed to save selectors",
         variant: "destructive"
       });
@@ -118,11 +119,57 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     if (iframe && iframe.contentDocument) {
       const element = iframe.contentDocument.querySelector(selector);
       if (element) {
+        setCurrentElement(element);
         setSelectedHtml(element.outerHTML);
         setIsHtmlDialogOpen(true);
       }
     }
   };
+
+  const navigateDOM = (direction: 'up' | 'down') => {
+    if (!currentElement) return;
+
+    const newElement = direction === 'up'
+      ? currentElement.parentElement
+      : currentElement.firstElementChild;
+
+    if (newElement && newElement.tagName !== 'HTML' && newElement.tagName !== 'BODY') {
+      setCurrentElement(newElement);
+      setSelectedHtml(newElement.outerHTML);
+    }
+  };
+
+  const expandToRoot = () => {
+    if (!currentElement) return;
+    let root = currentElement;
+    while (root.parentElement && root.parentElement.tagName !== 'BODY') {
+      root = root.parentElement;
+    }
+    setCurrentElement(root);
+    setSelectedHtml(root.outerHTML);
+  };
+
+  const handleHtmlClick = (e: React.MouseEvent<HTMLPreElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'SPAN' && target.classList.contains('tag-name')) {
+      const element = currentElement;
+      if (element) {
+        const selector = generateSelector(element as HTMLElement); // Assuming generateSelector function exists
+        if (!selectedSelectors.includes(selector)) {
+          setSelectedSelectors(prev => [...prev, selector]);
+        }
+        setIsHtmlDialogOpen(false);
+      }
+    }
+  };
+
+  const formatHtml = (html: string) => {
+    return html.replace(
+      /(<\/?[a-z0-9]+)/gi,
+      '<span class="tag-name cursor-pointer hover:text-primary">$1</span>'
+    );
+  };
+
 
   const handleSave = () => {
     if (selectedSelectors.length > 0 && url && selectedAttributes.length > 0) {
@@ -140,8 +187,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         <div className="text-muted-foreground text-sm">
           Click or long press an element in the preview to select it
         </div>
-        <Button 
-          type="button" 
+        <Button
+          type="button"
           onClick={onSelectionStart}
           className="w-full"
         >
@@ -158,11 +205,11 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         <div className="flex flex-wrap gap-2">
           {selectedSelectors.map((selector, index) => (
             <div key={index} className="flex items-center">
-              <Badge 
+              <Badge
                 variant="secondary"
                 className="cursor-pointer text-xs py-1 pl-2 pr-1 flex items-center gap-1"
               >
-                <span 
+                <span
                   onClick={() => handleShowHtml(selector)}
                   className="truncate max-w-[200px]"
                 >
@@ -183,8 +230,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
             </div>
           ))}
         </div>
-        <Button 
-          type="button" 
+        <Button
+          type="button"
           onClick={onSelectionStart}
           className="w-full mt-2"
         >
@@ -229,8 +276,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           <div className="text-sm font-medium mb-2">Selected Attributes:</div>
           <div className="flex flex-wrap gap-2">
             {selectedAttributes.map(attr => (
-              <Badge 
-                key={attr} 
+              <Badge
+                key={attr}
                 variant="secondary"
                 onClick={() => handleRemoveAttribute(attr)}
                 className="cursor-pointer text-xs py-1 px-2"
@@ -242,8 +289,8 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         </div>
       )}
 
-      <Button 
-        type="button" 
+      <Button
+        type="button"
         onClick={handleSave}
         disabled={selectedAttributes.length === 0 || selectedSelectors.length === 0}
         className="w-full"
@@ -254,13 +301,58 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
       <Dialog open={isHtmlDialogOpen} onOpenChange={setIsHtmlDialogOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Selected Element HTML</DialogTitle>
+            <DialogTitle className="flex items-center justify-between">
+              <span>Selected Element HTML</span>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateDOM('up')}
+                  disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
+                >
+                  <ChevronUp className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => navigateDOM('down')}
+                  disabled={!currentElement?.firstElementChild}
+                >
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={expandToRoot}
+                  disabled={!currentElement?.parentElement || currentElement.parentElement.tagName === 'BODY'}
+                >
+                  <ArrowUpToLine className="h-4 w-4" />
+                </Button>
+              </div>
+            </DialogTitle>
           </DialogHeader>
-          <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-            <code>{selectedHtml}</code>
+          <pre
+            className="bg-muted p-4 rounded-lg overflow-x-auto"
+            onClick={handleHtmlClick}
+          >
+            <code dangerouslySetInnerHTML={{ __html: formatHtml(selectedHtml) }} />
           </pre>
         </DialogContent>
       </Dialog>
     </div>
   );
 }
+
+// Placeholder for generateSelector function - needs actual implementation
+const generateSelector = (element: HTMLElement): string => {
+  // Implement logic to generate a CSS selector for the given element
+  // This is a crucial part and needs proper implementation based on your needs.
+  // A simple example, but may not be sufficient for all cases:
+  let selector = element.tagName.toLowerCase();
+  if (element.id) {
+    selector += `#${element.id}`;
+  } else if (element.classList.length > 0) {
+    selector += `.${Array.from(element.classList).join('.')}`;
+  }
+  return selector;
+};

@@ -299,7 +299,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         <iframe
           ref={iframeRef}
           className="w-full h-full border-0"
-          sandbox="allow-same-origin"
+          sandbox="allow-same-origin allow-scripts"
+          style={{ minWidth: '1024px' }}
           title="DOM Preview"
         />
       </div>
