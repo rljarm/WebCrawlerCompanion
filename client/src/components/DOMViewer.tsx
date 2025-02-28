@@ -7,11 +7,12 @@ interface DOMViewerProps {
   content: string;
   zoom: number;
   onElementSelect: (selector: string, isMultiSelect: boolean) => void;
+  isSelectionMode: boolean;
+  onSelectionModeChange: (mode: boolean) => void;
 }
 
-export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerProps) {
+export default function DOMViewer({ content, zoom, onElementSelect, isSelectionMode, onSelectionModeChange }: DOMViewerProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [isSelectMode, setIsSelectMode] = useState(false);
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedHTML, setSelectedHTML] = useState<string>("");
   const pressTimerRef = useRef<number>();
@@ -80,7 +81,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleMouseOver = (e: MouseEvent) => {
-      if (!isSelectMode || isPressingRef.current) return;
+      if (!isSelectionMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
@@ -91,7 +92,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleMouseOut = (e: MouseEvent) => {
-      if (!isSelectMode || isPressingRef.current) return;
+      if (!isSelectionMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
       if (!target.classList.contains('selected-element')) {
         target.classList.remove('highlight-target');
@@ -99,14 +100,14 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleClick = (e: MouseEvent) => {
-      if (!isSelectMode) return;
+      if (!isSelectionMode) return;
       e.preventDefault();
       e.stopPropagation();
       selectElement(e.target as HTMLElement);
     };
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (!isSelectMode) return;
+      if (!isSelectionMode) return;
       isPressingRef.current = true;
 
       const touch = e.touches[0];
@@ -128,7 +129,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!isSelectMode || !isPressingRef.current) return;
+      if (!isSelectionMode || !isPressingRef.current) return;
 
       // Remove highlight from previous target
       if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
@@ -151,7 +152,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
-      if (!isSelectMode) return;
+      if (!isSelectionMode) return;
       isPressingRef.current = false;
 
       if (pressTimerRef.current) {
@@ -179,7 +180,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
     }, true);
 
     // Toggle selection mode class
-    doc.body.classList.toggle('selectable', isSelectMode);
+    doc.body.classList.toggle('selectable', isSelectionMode);
 
     return () => {
       if (pressTimerRef.current) {
@@ -194,7 +195,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
       doc.removeEventListener('touchend', handleTouchEnd);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [content, onElementSelect, isSelectMode, isMultiSelect]);
+  }, [content, onElementSelect, isSelectionMode, isMultiSelect, onSelectionModeChange]);
 
   const generateSelector = (element: HTMLElement): string => {
     const path: string[] = [];
@@ -246,8 +247,8 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
         <div className="flex gap-2">
           <Button
             onClick={() => {
-              setIsSelectMode(!isSelectMode);
-              if (!isSelectMode) {
+              onSelectionModeChange(!isSelectionMode);
+              if (!isSelectionMode) {
                 setIsMultiSelect(false);
               }
               if (iframeRef.current?.contentDocument) {
@@ -257,12 +258,12 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
                 setSelectedHTML("");
               }
             }}
-            variant={isSelectMode ? "destructive" : "default"}
+            variant={isSelectionMode ? "destructive" : "default"}
           >
             <SiCurseforge className="mr-2 h-4 w-4" />
-            {isSelectMode ? "Cancel Selection" : "Select Element"}
+            {isSelectionMode ? "Cancel Selection" : "Select Element"}
           </Button>
-          {isSelectMode && (
+          {isSelectionMode && (
             <Button
               onClick={() => setIsMultiSelect(!isMultiSelect)}
               variant={isMultiSelect ? "secondary" : "outline"}
@@ -271,7 +272,7 @@ export default function DOMViewer({ content, zoom, onElementSelect }: DOMViewerP
             </Button>
           )}
         </div>
-        {isSelectMode && (
+        {isSelectionMode && (
           <div className="text-sm text-muted-foreground">
             {window.matchMedia('(hover: none)').matches
               ? "Long press any element to select it"

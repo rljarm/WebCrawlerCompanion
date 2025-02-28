@@ -9,6 +9,7 @@ import { useState, useEffect } from "react";
 interface ElementSelectorProps {
   selectedElement: string | null;
   url: string;
+  onSelectionStart: () => void;
 }
 
 const AVAILABLE_ATTRIBUTES = {
@@ -57,7 +58,7 @@ const AVAILABLE_ATTRIBUTES = {
   ]
 };
 
-export default function ElementSelector({ selectedElement, url }: ElementSelectorProps) {
+export default function ElementSelector({ selectedElement, url, onSelectionStart }: ElementSelectorProps) {
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<keyof typeof AVAILABLE_ATTRIBUTES>("Basic");
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
@@ -120,8 +121,17 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
 
   if (selectedSelectors.length === 0) {
     return (
-      <div className="text-muted-foreground text-sm">
-        Click or long press an element in the preview to select it
+      <div className="space-y-4">
+        <div className="text-muted-foreground text-sm">
+          Click or long press an element in the preview to select it
+        </div>
+        <Button 
+          type="button" 
+          onClick={onSelectionStart}
+          className="w-full"
+        >
+          Start Selection
+        </Button>
       </div>
     );
   }
@@ -142,6 +152,13 @@ export default function ElementSelector({ selectedElement, url }: ElementSelecto
             </Badge>
           ))}
         </div>
+        <Button 
+          type="button" 
+          onClick={onSelectionStart}
+          className="w-full mt-2"
+        >
+          Select More Elements
+        </Button>
       </div>
 
       <div>
