@@ -12,6 +12,7 @@ export default function Home() {
   const [domContent, setDomContent] = useState("");
   const [zoom, setZoom] = useState(1);
   const [selectedElement, setSelectedElement] = useState<string | null>(null);
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const handleUrlSubmit = async (submittedUrl: string, content: string) => {
     setUrl(submittedUrl);
@@ -20,6 +21,7 @@ export default function Home() {
 
   const handleElementSelect = (selector: string, isMultiSelect: boolean) => {
     setSelectedElement(selector);
+    setIsSelectionMode(false); // Turn off selection mode after selecting
   };
 
   return (
@@ -36,6 +38,8 @@ export default function Home() {
                   content={domContent} 
                   zoom={zoom}
                   onElementSelect={handleElementSelect}
+                  isSelectionMode={isSelectionMode}
+                  onSelectionModeChange={setIsSelectionMode}
                 />
                 <div className="absolute bottom-4 right-4 flex gap-2">
                   <NavigationControls />
@@ -51,6 +55,7 @@ export default function Home() {
               <ElementSelector 
                 selectedElement={selectedElement} 
                 url={url}
+                onSelectionStart={() => setIsSelectionMode(true)}
               />
             </Card>
 
