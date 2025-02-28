@@ -17,24 +17,33 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const [previewElement, setPreviewElement] = useState<HTMLElement | null>(null);
   const contentRef = useRef(content);
   const [isIframeLoaded, setIsIframeLoaded] = useState(false);
-  const { send, subscribe } = useWebSocket();
+  const { send, subscribe, isConnected } = useWebSocket();
 
   useEffect(() => {
-    subscribe((data) => {
-      if (data.type === 'ELEMENT_HIGHLIGHTED' && iframeRef.current?.contentDocument) {
+    if (!isConnected) return;
+
+    const handleWebSocketMessage = (data: any) => {
+      if (!iframeRef.current?.contentDocument) return;
+
+      if (data.type === 'ELEMENT_HIGHLIGHTED' || data.type === 'ELEMENT_SELECTED') {
         const element = iframeRef.current.contentDocument.querySelector(data.selector);
         if (element) {
           removeAllHighlights();
-          element.classList.add('highlight-target');
+          element.classList.add(data.type === 'ELEMENT_HIGHLIGHTED' ? 'highlight-target' : 'selected-element');
         }
       }
-    });
-  }, [subscribe]);
+    };
+
+    subscribe(handleWebSocketMessage);
+  }, [isConnected, subscribe]);
 
   const removeAllHighlights = () => {
     if (!iframeRef.current?.contentDocument) return;
-    const highlights = iframeRef.current.contentDocument.querySelectorAll('.highlight-target');
-    highlights.forEach(el => el.classList.remove('highlight-target'));
+
+    const highlights = iframeRef.current.contentDocument.querySelectorAll('.highlight-target, .selected-element');
+    highlights.forEach(el => {
+      el.classList.remove('highlight-target', 'selected-element');
+    });
   };
 
   useEffect(() => {
@@ -124,13 +133,14 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Keep the highlight
       removeAllHighlights();
       target.classList.add('highlight-target');
       setPreviewElement(target);
 
-      // Notify other clients about the highlight
-      send('HIGHLIGHT_ELEMENT', { selector: generateSelector(target) });
+      if (isConnected) {
+        const selector = generateSelector(target);
+        send('HIGHLIGHT_ELEMENT', { selector });
+      }
     };
 
     doc.addEventListener('click', handleClick);
@@ -140,17 +150,21 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       doc.removeEventListener('click', handleClick);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, isIframeLoaded, send]);
+  }, [isSelectionMode, isIframeLoaded, isConnected, send]);
 
   const handleConfirmSelection = () => {
     if (!previewElement) return;
     const selector = generateSelector(previewElement);
     onElementSelect(selector, false);
-    send('SELECT_ELEMENT', { 
-      selector,
-      attributes: ['text'],
-      data: { text: previewElement.textContent || '' }
-    });
+
+    if (isConnected) {
+      send('SELECT_ELEMENT', { 
+        selector,
+        attributes: ['text'],
+        data: { text: previewElement.textContent || '' }
+      });
+    }
+
     setPreviewElement(null);
   };
 
@@ -167,7 +181,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   };
 
   return (
-    <div className="space-y-4">
+    <div className="min-h-screen bg-black">
       <div className="fixed top-0 left-0 right-0 z-10 bg-black border-b-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6] p-4">
         <div className="flex justify-between items-center">
           <div className="flex gap-2">
@@ -210,15 +224,17 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         </div>
       </div>
 
-      <div className="pt-16 w-full h-[calc(100vh-4rem)] bg-black p-4">
-        <div className="w-full h-full border-2 border-[#007BFF] rounded-lg shadow-[0_0_15px_#ADD8E6] overflow-hidden">
-          <iframe
-            ref={iframeRef}
-            className="w-full h-full"
-            sandbox="allow-same-origin allow-scripts"
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
-            title="DOM Preview"
-          />
+      <div className="pt-16">
+        <div className="relative">
+          <div className="w-full border-2 border-[#007BFF] rounded-lg shadow-[0_0_15px_#ADD8E6] overflow-hidden">
+            <iframe
+              ref={iframeRef}
+              className="w-full h-[calc(100vh-5rem)]"
+              sandbox="allow-same-origin allow-scripts"
+              style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+              title="DOM Preview"
+            />
+          </div>
         </div>
       </div>
     </div>
