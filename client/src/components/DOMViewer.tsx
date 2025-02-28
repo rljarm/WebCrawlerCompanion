@@ -39,11 +39,8 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
 
   const removeAllHighlights = () => {
     if (!iframeRef.current?.contentDocument) return;
-
-    const elements = iframeRef.current.contentDocument.querySelectorAll('.highlight-target, .selected-element');
-    elements.forEach(el => {
-      el.classList.remove('highlight-target', 'selected-element');
-    });
+    const elements = iframeRef.current.contentDocument.querySelectorAll('.selected-element');
+    elements.forEach(el => el.classList.remove('selected-element'));
   };
 
   useEffect(() => {
@@ -69,11 +66,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
                 .selectable * { 
                   cursor: crosshair !important; 
                 }
-                .highlight-target { 
-                  outline: 2px solid #007BFF !important;
-                  background: rgba(0, 123, 255, 0.1) !important;
-                  box-shadow: 0 0 15px #ADD8E6 !important;
-                }
                 .selected-element {
                   outline: 3px solid #007BFF !important;
                   background: rgba(0, 123, 255, 0.1) !important;
@@ -96,31 +88,32 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   }, [content]);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe || !isIframeLoaded) return;
+    if (!isIframeLoaded || !iframeRef.current?.contentDocument) return;
 
-    const doc = iframe.contentDocument;
-    if (!doc) return;
-
+    const doc = iframeRef.current.contentDocument;
     doc.body.classList.toggle('selectable', isSelectionMode);
 
     const handleClick = (e: MouseEvent) => {
-      if (!isSelectionMode) return;
+      const target = e.target as HTMLElement;
 
-      try {
+      // Always prevent link clicks in selection mode
+      if (isSelectionMode && (target.tagName === 'A' || target.closest('a'))) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      // Handle element selection
+      if (isSelectionMode && target && target.tagName !== 'HTML' && target.tagName !== 'BODY') {
         e.preventDefault();
         e.stopPropagation();
 
-        const target = e.target as HTMLElement;
-        if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
         removeAllHighlights();
+        target.classList.add('selected-element');
 
-        // Ensure the element still exists before adding class
-        if (target.isConnected) {
-          target.classList.add('selected-element');
+        const selector = generateSelector(target);
+        onElementSelect(selector, false);
 
-          const selector = generateSelector(target);
+        if (isConnected) {
           const data: Record<string, string> = {
             text: target.textContent?.trim() || ''
           };
@@ -129,39 +122,20 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
             data.href = target.href;
           }
 
-          onElementSelect(selector, false);
-
-          if (isConnected) {
-            send('SELECT_ELEMENT', { 
-              selector,
-              attributes: Object.keys(data),
-              data
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error during element selection:', error);
-      }
-    };
-
-    // Prevent link navigation in selection mode
-    const preventNavigation = (e: MouseEvent) => {
-      if (isSelectionMode) {
-        const target = e.target as HTMLElement;
-        if (target?.closest('a')) {
-          e.preventDefault();
-          e.stopPropagation();
+          send('SELECT_ELEMENT', { 
+            selector,
+            attributes: Object.keys(data),
+            data
+          });
         }
       }
     };
 
-    doc.addEventListener('click', handleClick);
-    doc.addEventListener('click', preventNavigation, true);
+    doc.addEventListener('click', handleClick, true);
     doc.addEventListener('contextmenu', (e) => e.preventDefault());
 
     return () => {
-      doc.removeEventListener('click', handleClick);
-      doc.removeEventListener('click', preventNavigation, true);
+      doc.removeEventListener('click', handleClick, true);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
   }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect]);
@@ -172,7 +146,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       selector += `#${element.id}`;
     } else if (element.classList.length > 0) {
       selector += `.${Array.from(element.classList)
-        .filter(c => !['highlight-target', 'selected-element', 'selectable'].includes(c))
+        .filter(c => !['selected-element', 'selectable'].includes(c))
         .join('.')}`;
     }
     return selector;
