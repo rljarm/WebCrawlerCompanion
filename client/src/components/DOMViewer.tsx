@@ -2,6 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { SiCurseforge } from "react-icons/si";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, ChevronDown } from "lucide-react";
 
 interface DOMViewerProps {
   content: string;
@@ -19,44 +26,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const pressTargetRef = useRef<HTMLElement | null>(null);
   const isPressingRef = useRef(false);
 
-  const handleElementSelect = (element: HTMLElement) => {
-    if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
-
-    // Store current scroll position
-    const scrollPosition = {
-      x: iframeRef.current?.contentWindow?.scrollX || 0,
-      y: iframeRef.current?.contentWindow?.scrollY || 0
-    };
-
-    // Remove previous highlights
-    const doc = iframeRef.current?.contentDocument;
-    if (!doc) return;
-
-    doc.querySelectorAll('.highlight-target').forEach(el => {
-      el.classList.remove('highlight-target');
-    });
-
-    // If not in multi-select mode, clear previous selections
-    if (!isMultiSelect) {
-      doc.querySelectorAll('.selected-element').forEach(el => {
-        el.classList.remove('selected-element');
-      });
-    }
-
-    // Add new selection
-    element.classList.remove('highlight-target');
-    element.classList.add('selected-element');
-
-    const selector = generateSelector(element);
-    onElementSelect(selector, isMultiSelect);
-    setSelectedHTML(element.outerHTML);
-
-    // Restore scroll position
-    if (iframeRef.current?.contentWindow) {
-      iframeRef.current.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
-    }
-  };
-
   useEffect(() => {
     const iframe = iframeRef.current;
     if (!iframe || !content) return;
@@ -64,42 +33,91 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     const doc = iframe.contentDocument;
     if (!doc) return;
 
-    // Reset iframe content
+    // Write content and wait for load
     doc.open();
-    doc.write(content);
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <base href="https://en.wikipedia.org" />
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            * { 
+              cursor: default !important;
+              -webkit-tap-highlight-color: transparent !important;
+              user-select: none !important;
+              -webkit-touch-callout: none !important;
+            }
+            .selectable * { 
+              cursor: crosshair !important; 
+            }
+            .highlight-target { 
+              outline: 2px solid #2563eb !important;
+              background: rgba(37, 99, 235, 0.1) !important;
+              transition: outline 0.15s ease, background 0.15s ease !important;
+            }
+            .selected-element {
+              outline: 3px solid #16a34a !important;
+              background: rgba(22, 163, 74, 0.1) !important;
+              transition: outline 0.15s ease, background 0.15s ease !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${content}
+        </body>
+      </html>
+    `);
     doc.close();
 
-    // Add styles for selection mode
-    const style = doc.createElement('style');
-    style.textContent = `
-      * { 
-        cursor: default !important;
-        -webkit-tap-highlight-color: transparent !important;
-        user-select: none !important;
-        -webkit-touch-callout: none !important;
+    // Store iframe scroll position
+    let scrollX = 0;
+    let scrollY = 0;
+
+    const handleScroll = () => {
+      scrollX = iframe.contentWindow?.scrollX || 0;
+      scrollY = iframe.contentWindow?.scrollY || 0;
+    };
+
+    const restoreScroll = () => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.scrollTo(scrollX, scrollY);
       }
-      .selectable * { 
-        cursor: crosshair !important; 
+    };
+
+    const handleElementSelect = (element: HTMLElement) => {
+      if (element.tagName === 'HTML' || element.tagName === 'BODY') return;
+
+      // Remove previous highlights
+      doc.querySelectorAll('.highlight-target').forEach(el => {
+        el.classList.remove('highlight-target');
+      });
+
+      // If not in multi-select mode, clear previous selections
+      if (!isMultiSelect) {
+        doc.querySelectorAll('.selected-element').forEach(el => {
+          el.classList.remove('selected-element');
+        });
       }
-      .highlight-target { 
-        outline: 2px solid #2563eb !important;
-        background: rgba(37, 99, 235, 0.1) !important;
-        transition: outline 0.15s ease, background 0.15s ease !important;
-      }
-      .selected-element {
-        outline: 3px solid #16a34a !important;
-        background: rgba(22, 163, 74, 0.1) !important;
-        transition: outline 0.15s ease, background 0.15s ease !important;
-      }
-    `;
-    doc.head.appendChild(style);
+
+      // Add new selection
+      element.classList.remove('highlight-target');
+      element.classList.add('selected-element');
+
+      const selector = generateSelector(element);
+      onElementSelect(selector, isMultiSelect);
+      setSelectedHTML(element.outerHTML);
+
+      // Restore scroll position
+      restoreScroll();
+    };
 
     const handleMouseOver = (e: MouseEvent) => {
       if (!isSelectionMode || isPressingRef.current) return;
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Don't highlight if already selected
       if (!target.classList.contains('selected-element')) {
         target.classList.add('highlight-target');
       }
@@ -142,56 +160,13 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       }, 500);
     };
 
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!isSelectionMode || !isPressingRef.current) return;
-
-      // Remove highlight from previous target
-      if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
-        pressTargetRef.current.classList.remove('highlight-target');
-      }
-
-      const touch = e.touches[0];
-      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
-      if (!target || target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-      if (pressTargetRef.current !== target) {
-        if (pressTimerRef.current) {
-          clearTimeout(pressTimerRef.current);
-        }
-        pressTargetRef.current = target;
-        if (!target.classList.contains('selected-element')) {
-          target.classList.add('highlight-target');
-        }
-      }
-    };
-
-    const handleTouchEnd = (e: TouchEvent) => {
-      if (!isSelectionMode) return;
-      isPressingRef.current = false;
-
-      if (pressTimerRef.current) {
-        clearTimeout(pressTimerRef.current);
-      }
-
-      if (pressTargetRef.current && !pressTargetRef.current.classList.contains('selected-element')) {
-        pressTargetRef.current.classList.remove('highlight-target');
-      }
-      pressTargetRef.current = null;
-    };
-
     // Add event listeners
+    doc.addEventListener('scroll', handleScroll);
     doc.addEventListener('mouseover', handleMouseOver, true);
     doc.addEventListener('mouseout', handleMouseOut, true);
     doc.addEventListener('click', handleClick, true);
     doc.addEventListener('touchstart', handleTouchStart);
-    doc.addEventListener('touchmove', handleTouchMove);
-    doc.addEventListener('touchend', handleTouchEnd);
-
-    // Prevent context menu
-    doc.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      return false;
-    }, true);
+    doc.addEventListener('contextmenu', (e) => e.preventDefault(), true);
 
     // Toggle selection mode class
     doc.body.classList.toggle('selectable', isSelectionMode);
@@ -201,12 +176,11 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         clearTimeout(pressTimerRef.current);
       }
       // Clean up event listeners
+      doc.removeEventListener('scroll', handleScroll);
       doc.removeEventListener('mouseover', handleMouseOver, true);
       doc.removeEventListener('mouseout', handleMouseOut, true);
       doc.removeEventListener('click', handleClick, true);
       doc.removeEventListener('touchstart', handleTouchStart);
-      doc.removeEventListener('touchmove', handleTouchMove);
-      doc.removeEventListener('touchend', handleTouchEnd);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
   }, [content, onElementSelect, isSelectionMode, isMultiSelect]);
@@ -247,7 +221,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
     return path.join(' > ');
   };
 
-  // Update zoom level
   useEffect(() => {
     if (iframeRef.current) {
       iframeRef.current.style.transform = `scale(${zoom})`;
@@ -277,14 +250,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
             <SiCurseforge className="mr-2 h-4 w-4" />
             {isSelectionMode ? "Cancel Selection" : "Select Element"}
           </Button>
-          {isSelectionMode && (
-            <Button
-              onClick={() => setIsMultiSelect(!isMultiSelect)}
-              variant={isMultiSelect ? "secondary" : "outline"}
-            >
-              Select Multiple
-            </Button>
-          )}
         </div>
         {isSelectionMode && (
           <div className="text-sm text-muted-foreground">
@@ -299,20 +264,11 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         <iframe
           ref={iframeRef}
           className="w-full h-full border-0"
-          sandbox="allow-same-origin allow-scripts"
-          style={{ minWidth: '1024px' }}
+          sandbox="allow-same-origin allow-scripts allow-popups"
+          style={{ width: '100%', height: '100%' }}
           title="DOM Preview"
         />
       </div>
-
-      {selectedHTML && (
-        <Card className="p-4">
-          <div className="text-sm font-medium mb-2">Selected Element HTML:</div>
-          <pre className="text-xs bg-muted p-2 rounded-md overflow-x-auto">
-            {selectedHTML}
-          </pre>
-        </Card>
-      )}
     </div>
   );
 }

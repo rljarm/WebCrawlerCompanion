@@ -3,10 +3,15 @@ import { Button } from "@/components/ui/button";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Badge } from "@/components/ui/badge";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, ChevronUp, ChevronDown, Maximize, ArrowUpToLine } from "lucide-react";
+import { X, Plus, ChevronUp, ChevronDown, ArrowUpToLine } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface ElementSelectorProps {
   selectedElement: string | null;
@@ -14,55 +19,23 @@ interface ElementSelectorProps {
   onSelectionStart: () => void;
 }
 
-const AVAILABLE_ATTRIBUTES = {
-  Basic: [
-    "text",
-    "href",
-    "src",
-    "alt",
-    "title",
-    "value",
-    "class",
-    "id",
-    "name",
-    "type"
-  ],
-  Data: [
-    "data-src",
-    "data-href",
-    "data-id",
-    "data-url",
-    "data-type",
-    "data-value",
-    "data-title"
-  ],
-  Media: [
-    "src",
-    "poster",
-    "preload",
-    "controls",
-    "autoplay",
-    "loop",
-    "muted",
-    "playsinline",
-    "data-video-url",
-    "data-audio-url",
-    "data-media-type",
-    "data-duration",
-    "data-timestamp"
-  ],
-  Download: [
-    "download",
-    "data-download-url",
-    "data-file-type",
-    "data-file-size",
-    "data-format"
-  ]
-};
+// Combine all attributes into a single list
+const ALL_ATTRIBUTES = [
+  { category: "Basic", items: ["text", "href", "src", "alt", "title", "value", "class", "id", "name", "type"] },
+  { category: "Data", items: ["data-src", "data-href", "data-id", "data-url", "data-type", "data-value", "data-title"] },
+  { category: "Media", items: ["src", "poster", "preload", "controls", "autoplay", "loop", "muted", "playsinline"] },
+  { category: "Download", items: ["download", "data-download-url", "data-file-type", "data-file-size", "data-format"] }
+];
+
+const ACTIONS = [
+  { label: "Follow Link", value: "follow" },
+  { label: "Download Content", value: "download" },
+  { label: "Copy Text", value: "copy" },
+  { label: "Extract Media", value: "media" }
+];
 
 export default function ElementSelector({ selectedElement, url, onSelectionStart }: ElementSelectorProps) {
   const { toast } = useToast();
-  const [selectedCategory, setSelectedCategory] = useState<keyof typeof AVAILABLE_ATTRIBUTES>("Basic");
   const [selectedAttributes, setSelectedAttributes] = useState<string[]>([]);
   const [selectedSelectors, setSelectedSelectors] = useState<string[]>([]);
   const [selectedHtml, setSelectedHtml] = useState<string>("");
@@ -126,6 +99,40 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     }
   };
 
+  const handleAction = (action: string, selector: string) => {
+    const iframe = document.querySelector('iframe');
+    if (!iframe?.contentDocument) return;
+
+    const element = iframe.contentDocument.querySelector(selector);
+    if (!element) return;
+
+    switch (action) {
+      case 'follow':
+        if (element instanceof HTMLAnchorElement) {
+          window.open(element.href, '_blank');
+        }
+        break;
+      case 'download':
+        if (element instanceof HTMLImageElement || element instanceof HTMLVideoElement) {
+          const link = document.createElement('a');
+          link.href = element.src;
+          link.download = '';
+          link.click();
+        }
+        break;
+      case 'copy':
+        navigator.clipboard.writeText(element.textContent || '');
+        toast({ title: "Copied", description: "Text copied to clipboard" });
+        break;
+      case 'media':
+        const mediaUrl = element.getAttribute('src') || element.getAttribute('data-src');
+        if (mediaUrl) {
+          window.open(mediaUrl, '_blank');
+        }
+        break;
+    }
+  };
+
   const navigateDOM = (direction: 'up' | 'down') => {
     if (!currentElement) return;
 
@@ -154,7 +161,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     if (target.tagName === 'SPAN' && target.classList.contains('tag-name')) {
       const element = currentElement;
       if (element) {
-        const selector = generateSelector(element as HTMLElement); // Assuming generateSelector function exists
+        const selector = generateSelector(element as HTMLElement);
         if (!selectedSelectors.includes(selector)) {
           setSelectedSelectors(prev => [...prev, selector]);
         }
@@ -170,133 +177,84 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     );
   };
 
-
-  const handleSave = () => {
-    if (selectedSelectors.length > 0 && url && selectedAttributes.length > 0) {
-      mutation.mutate({
-        selectors: selectedSelectors,
-        attributes: selectedAttributes,
-        url
-      });
-    }
-  };
-
   if (selectedSelectors.length === 0) {
     return (
-      <div className="space-y-4">
-        <div className="text-muted-foreground text-sm">
-          Click or long press an element in the preview to select it
-        </div>
+      <div className="fixed bottom-4 left-4">
         <Button
           type="button"
           onClick={onSelectionStart}
-          className="w-full"
+          variant="secondary"
         >
-          Start Selection
+          <Plus className="mr-2 h-4 w-4" />
+          Select Elements
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <div className="text-sm font-medium mb-2">Selected Elements:</div>
-        <div className="flex flex-wrap gap-2">
-          {selectedSelectors.map((selector, index) => (
-            <div key={index} className="flex items-center">
-              <Badge
-                variant="secondary"
-                className="cursor-pointer text-xs py-1 pl-2 pr-1 flex items-center gap-1"
-              >
-                <span
-                  onClick={() => handleShowHtml(selector)}
-                  className="truncate max-w-[200px]"
-                >
-                  {selector}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-4 w-4 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleRemoveSelector(selector);
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              </Badge>
-            </div>
-          ))}
-        </div>
-        <Button
-          type="button"
-          onClick={onSelectionStart}
-          className="w-full mt-2"
+    <div className="fixed bottom-4 left-4 flex flex-col gap-2">
+      {selectedSelectors.map((selector, index) => (
+        <div
+          key={index}
+          className="flex items-center gap-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 rounded-full shadow-lg p-2"
         >
-          Select More Elements
-        </Button>
-      </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              {ALL_ATTRIBUTES.map(category => (
+                <DropdownMenuItem
+                  key={category.category}
+                  className="flex items-center"
+                  onSelect={() => handleAttributeSelect(category.items[0])}
+                >
+                  {category.category}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-      <div>
-        <div className="text-sm font-medium mb-2">Attribute Category:</div>
-        <Select value={selectedCategory} onValueChange={(value: keyof typeof AVAILABLE_ATTRIBUTES) => setSelectedCategory(value)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose attribute category" />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.keys(AVAILABLE_ATTRIBUTES).map(category => (
-              <SelectItem key={category} value={category}>
-                {category}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div>
-        <div className="text-sm font-medium mb-2">Select Attributes:</div>
-        <Select onValueChange={handleAttributeSelect}>
-          <SelectTrigger>
-            <SelectValue placeholder="Choose attributes to extract" />
-          </SelectTrigger>
-          <SelectContent>
-            {AVAILABLE_ATTRIBUTES[selectedCategory].map(attr => (
-              <SelectItem key={attr} value={attr}>
-                {attr}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {selectedAttributes.length > 0 && (
-        <div>
-          <div className="text-sm font-medium mb-2">Selected Attributes:</div>
-          <div className="flex flex-wrap gap-2">
-            {selectedAttributes.map(attr => (
-              <Badge
-                key={attr}
-                variant="secondary"
-                onClick={() => handleRemoveAttribute(attr)}
-                className="cursor-pointer text-xs py-1 px-2"
-              >
-                {attr} ×
-              </Badge>
-            ))}
+          <div
+            className="px-3 py-1 cursor-pointer"
+            onClick={() => handleShowHtml(selector)}
+          >
+            <span className="truncate max-w-[200px]">
+              {selector}
+            </span>
           </div>
-        </div>
-      )}
 
-      <Button
-        type="button"
-        onClick={handleSave}
-        disabled={selectedAttributes.length === 0 || selectedSelectors.length === 0}
-        className="w-full"
-      >
-        Save Selections
-      </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {ACTIONS.map(action => (
+                <DropdownMenuItem
+                  key={action.value}
+                  onSelect={() => handleAction(action.value, selector)}
+                >
+                  {action.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 hover:bg-destructive hover:text-destructive-foreground rounded-full"
+            onClick={() => handleRemoveSelector(selector)}
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      ))}
 
       <Dialog open={isHtmlDialogOpen} onOpenChange={setIsHtmlDialogOpen}>
         <DialogContent className="max-w-3xl">
@@ -343,11 +301,7 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
   );
 }
 
-// Placeholder for generateSelector function - needs actual implementation
 const generateSelector = (element: HTMLElement): string => {
-  // Implement logic to generate a CSS selector for the given element
-  // This is a crucial part and needs proper implementation based on your needs.
-  // A simple example, but may not be sufficient for all cases:
   let selector = element.tagName.toLowerCase();
   if (element.id) {
     selector += `#${element.id}`;
