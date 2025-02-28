@@ -30,12 +30,15 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
         if (element) {
           removeAllHighlights();
           element.classList.add(data.type === 'ELEMENT_HIGHLIGHTED' ? 'highlight-target' : 'selected-element');
+          if (data.type === 'ELEMENT_SELECTED') {
+            onElementSelect(data.selector, false);
+          }
         }
       }
     };
 
     subscribe(handleWebSocketMessage);
-  }, [isConnected, subscribe]);
+  }, [isConnected, subscribe, onElementSelect]);
 
   const removeAllHighlights = () => {
     if (!iframeRef.current?.contentDocument) return;
@@ -133,14 +136,22 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       const target = e.target as HTMLElement;
       if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
+      // Keep the highlight and immediately select the element
       removeAllHighlights();
-      target.classList.add('highlight-target');
-      setPreviewElement(target);
+      target.classList.add('selected-element');
+
+      const selector = generateSelector(target);
+      onElementSelect(selector, false);
 
       if (isConnected) {
-        const selector = generateSelector(target);
-        send('HIGHLIGHT_ELEMENT', { selector });
+        send('SELECT_ELEMENT', { 
+          selector,
+          attributes: ['text'],
+          data: { text: target.textContent || '' }
+        });
       }
+
+      setPreviewElement(null);
     };
 
     doc.addEventListener('click', handleClick);
@@ -150,23 +161,7 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
       doc.removeEventListener('click', handleClick);
       doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, isIframeLoaded, isConnected, send]);
-
-  const handleConfirmSelection = () => {
-    if (!previewElement) return;
-    const selector = generateSelector(previewElement);
-    onElementSelect(selector, false);
-
-    if (isConnected) {
-      send('SELECT_ELEMENT', { 
-        selector,
-        attributes: ['text'],
-        data: { text: previewElement.textContent || '' }
-      });
-    }
-
-    setPreviewElement(null);
-  };
+  }, [isSelectionMode, isIframeLoaded, isConnected, send, onElementSelect]);
 
   const generateSelector = (element: HTMLElement): string => {
     let selector = element.tagName.toLowerCase();
@@ -198,21 +193,6 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
               <SiCurseforge className="mr-2 h-4 w-4" />
               {isSelectionMode ? "Cancel Selection" : "Select Element"}
             </Button>
-            {previewElement && (
-              <Button
-                onClick={handleConfirmSelection}
-                variant="secondary"
-                className={`
-                  bg-black border-2 border-[#007BFF] text-[#007BFF]
-                  hover:text-[#ADD8E6] hover:border-[#ADD8E6]
-                  shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF]
-                  transition-all duration-300
-                `}
-              >
-                <Eye className="mr-2 h-4 w-4" />
-                Confirm Selection
-              </Button>
-            )}
           </div>
           {isSelectionMode && (
             <div className="text-sm text-[#007BFF]">

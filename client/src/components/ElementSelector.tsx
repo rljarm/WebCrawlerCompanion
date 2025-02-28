@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { X, Plus, ChevronUp, ChevronDown, ArrowUpToLine, Download } from "lucide-react";
+import { X, List, ChevronDown, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 
 interface ElementSelectorProps {
@@ -17,13 +18,6 @@ interface ElementSelectorProps {
   onSelectionStart: () => void;
 }
 
-const ATTRIBUTES = {
-  Basic: ["text", "href", "src", "alt", "title", "value"],
-  Data: ["data-src", "data-href", "data-id", "data-url", "data-type"],
-  Media: ["src", "poster", "preload", "controls", "autoplay"],
-  Download: ["download", "data-download-url", "data-file-type"]
-};
-
 const MEDIA_DOWNLOADERS = [
   { name: "Direct Download", handler: "direct" },
   { name: "YouTube-DL", handler: "youtube-dl" },
@@ -31,19 +25,27 @@ const MEDIA_DOWNLOADERS = [
   { name: "Audio Extractor", handler: "audio" }
 ];
 
+const ALL_ATTRIBUTES = {
+  Basic: ["text", "href", "src", "alt", "title", "value"],
+  Media: ["src", "poster", "preload", "controls", "autoplay"],
+  Data: ["data-src", "data-href", "data-id", "data-url", "data-type"],
+  Download: ["download", "data-download-url", "data-file-type"]
+};
+
 interface SelectedSelector {
   selector: string;
   attributes: string[];
   extractedData: Record<string, string>;
   mediaType?: string;
+  availableAttributes: string[];
 }
 
 export default function ElementSelector({ selectedElement, url, onSelectionStart }: ElementSelectorProps) {
   const { toast } = useToast();
   const [selectedSelectors, setSelectedSelectors] = useState<SelectedSelector[]>([]);
-  const [selectedHtml, setSelectedHtml] = useState<string>("");
-  const [isHtmlDialogOpen, setIsHtmlDialogOpen] = useState(false);
-  const [currentElement, setCurrentElement] = useState<Element | null>(null);
+  const [isAttributeDialogOpen, setIsAttributeDialogOpen] = useState(false);
+  const [currentSelector, setCurrentSelector] = useState<string | null>(null);
+  const [customAttribute, setCustomAttribute] = useState("");
   const [lastSuccessfulDownloader, setLastSuccessfulDownloader] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,8 +54,15 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
       if (iframe?.contentDocument) {
         const element = iframe.contentDocument.querySelector(selectedElement);
         if (element) {
-          // Default to text attribute
-          const initialData = { text: element.textContent || '' };
+          // Get all available attributes
+          const availableAttributes = Array.from(element.attributes)
+            .map(attr => attr.name)
+            .filter(attr => attr !== 'class' && attr !== 'style');
+
+          // Always include text if element has text content
+          if (element.textContent?.trim()) {
+            availableAttributes.unshift('text');
+          }
 
           // Detect media type
           let mediaType;
@@ -65,11 +74,25 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
             mediaType = 'image';
           }
 
+          const initialData: Record<string, string> = {
+            text: element.textContent?.trim() || ''
+          };
+
+          // Add first three attributes by default
+          const defaultAttributes = ['text'];
+          availableAttributes.slice(0, 2).forEach(attr => {
+            if (attr !== 'text') {
+              defaultAttributes.push(attr);
+              initialData[attr] = (element as HTMLElement).getAttribute(attr) || '';
+            }
+          });
+
           const newSelector: SelectedSelector = {
             selector: selectedElement,
-            attributes: ['text'],
+            attributes: defaultAttributes,
             extractedData: initialData,
-            mediaType
+            mediaType,
+            availableAttributes
           };
 
           setSelectedSelectors(prev => {
@@ -84,12 +107,19 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     }
   }, [selectedElement]);
 
-  const handleAttributeToggle = (selector: string, attribute: string) => {
+  const handleAttributeDialogOpen = (selector: string) => {
+    setCurrentSelector(selector);
+    setIsAttributeDialogOpen(true);
+  };
+
+  const handleAttributeToggle = (attribute: string) => {
+    if (!currentSelector) return;
+
     setSelectedSelectors(prev => prev.map(s => {
-      if (s.selector === selector) {
+      if (s.selector === currentSelector) {
         const iframe = document.querySelector('iframe');
         if (iframe?.contentDocument) {
-          const element = iframe.contentDocument.querySelector(selector);
+          const element = iframe.contentDocument.querySelector(s.selector);
           if (element) {
             let value = '';
             if (attribute === 'text') {
@@ -122,6 +152,36 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     }));
   };
 
+  const handleAddCustomAttribute = () => {
+    if (!customAttribute || !currentSelector) return;
+
+    const iframe = document.querySelector('iframe');
+    if (iframe?.contentDocument) {
+      const element = iframe.contentDocument.querySelector(currentSelector);
+      if (element) {
+        const value = (element as HTMLElement).getAttribute(customAttribute) || '';
+
+        setSelectedSelectors(prev => prev.map(s => {
+          if (s.selector === currentSelector) {
+            return {
+              ...s,
+              attributes: [...s.attributes, customAttribute],
+              extractedData: {
+                ...s.extractedData,
+                [customAttribute]: value
+              },
+              availableAttributes: [...s.availableAttributes, customAttribute]
+            };
+          }
+          return s;
+        }));
+
+        setCustomAttribute("");
+        toast({ title: "Success", description: "Custom attribute added" });
+      }
+    }
+  };
+
   const handleMediaDownload = async (selector: string, handler: string) => {
     const iframe = document.querySelector('iframe');
     if (!iframe?.contentDocument) return;
@@ -147,7 +207,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
         return;
       }
 
-      // In a real implementation, this would call your backend API
       const response = await fetch('/api/download-media', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -168,51 +227,22 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
 
   return (
     <div className="fixed top-20 right-4 flex flex-col gap-2 max-h-[calc(100vh-6rem)] overflow-y-auto">
-      {selectedSelectors.map((selector, index) => (
+      {selectedSelectors.map((selector) => (
         <div
-          key={index}
+          key={selector.selector}
           className="flex items-center gap-2 bg-black border-2 border-[#007BFF] rounded-[25%] shadow-[0_0_15px_#ADD8E6] hover:shadow-[0_0_20px_#007BFF] transition-all duration-300 p-2"
           style={{
             animation: "glow 1.5s ease-in-out infinite alternate"
           }}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 bg-black border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
-              {Object.entries(ATTRIBUTES).map(([category, attrs]) => (
-                <>
-                  <DropdownMenuItem
-                    key={category}
-                    className="text-[#007BFF] font-bold"
-                  >
-                    {category}
-                  </DropdownMenuItem>
-                  {attrs.map(attr => (
-                    <DropdownMenuItem
-                      key={attr}
-                      className={`pl-4 ${
-                        selector.attributes.includes(attr)
-                          ? "text-[#ADD8E6]"
-                          : "text-[#007BFF]"
-                      } hover:text-[#ADD8E6] hover:bg-black/50`}
-                      onClick={() => handleAttributeToggle(selector.selector, attr)}
-                    >
-                      {attr}
-                    </DropdownMenuItem>
-                  ))}
-                  <DropdownMenuSeparator />
-                </>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-8 w-8 p-0 text-[#007BFF] hover:text-[#ADD8E6] transition-colors"
+            onClick={() => handleAttributeDialogOpen(selector.selector)}
+          >
+            <List className="h-4 w-4" />
+          </Button>
 
           <div className="flex-1 px-3 py-1">
             <div className="text-[#007BFF] font-bold mb-1">{selector.selector}</div>
@@ -261,6 +291,94 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
           </Button>
         </div>
       ))}
+
+      <Dialog open={isAttributeDialogOpen} onOpenChange={setIsAttributeDialogOpen}>
+        <DialogContent className="bg-black border-2 border-[#007BFF] shadow-[0_0_15px_#ADD8E6]">
+          <DialogHeader>
+            <DialogTitle className="text-[#007BFF]">Manage Attributes</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {currentSelector && (
+              <>
+                <div className="space-y-2">
+                  <h4 className="text-[#ADD8E6] font-medium">Available Attributes</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {selectedSelectors
+                      .find(s => s.selector === currentSelector)
+                      ?.availableAttributes.map(attr => (
+                        <Button
+                          key={attr}
+                          variant="outline"
+                          size="sm"
+                          className={`
+                            border-[#007BFF] 
+                            ${selectedSelectors.find(s => s.selector === currentSelector)?.attributes.includes(attr)
+                              ? "bg-[#007BFF] text-white"
+                              : "text-[#007BFF]"
+                            }
+                            hover:text-[#ADD8E6] hover:border-[#ADD8E6]
+                          `}
+                          onClick={() => handleAttributeToggle(attr)}
+                        >
+                          {attr}
+                        </Button>
+                      ))
+                    }
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-[#ADD8E6] font-medium">Add Custom Attribute</h4>
+                  <div className="flex gap-2">
+                    <Input
+                      value={customAttribute}
+                      onChange={(e) => setCustomAttribute(e.target.value)}
+                      placeholder="Enter attribute name"
+                      className="bg-black border-[#007BFF] text-white"
+                    />
+                    <Button
+                      onClick={handleAddCustomAttribute}
+                      className="border-[#007BFF] text-[#007BFF] hover:text-[#ADD8E6] hover:border-[#ADD8E6]"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-[#ADD8E6] font-medium">Common Attributes</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(ALL_ATTRIBUTES).map(([category, attrs]) => (
+                      <div key={category}>
+                        <h5 className="text-[#007BFF] text-sm mb-1">{category}</h5>
+                        {attrs.map(attr => (
+                          <Button
+                            key={attr}
+                            variant="outline"
+                            size="sm"
+                            className={`
+                              border-[#007BFF] mb-1 w-full
+                              ${selectedSelectors.find(s => s.selector === currentSelector)?.attributes.includes(attr)
+                                ? "bg-[#007BFF] text-white"
+                                : "text-[#007BFF]"
+                              }
+                              hover:text-[#ADD8E6] hover:border-[#ADD8E6]
+                            `}
+                            onClick={() => handleAttributeToggle(attr)}
+                          >
+                            {attr}
+                          </Button>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <style jsx global>{`
         @keyframes glow {
