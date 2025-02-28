@@ -17,137 +17,127 @@ export default function DOMViewer({ content, zoom, onElementSelect, isSelectionM
   const [selectedHTML, setSelectedHTML] = useState<string>("");
   const [previewElement, setPreviewElement] = useState<HTMLElement | null>(null);
   const contentRef = useRef(content);
+  const [isIframeLoaded, setIsIframeLoaded] = useState(false);
 
   useEffect(() => {
     contentRef.current = content;
+    // Only rewrite content when it actually changes
+    if (content && iframeRef.current) {
+      const doc = iframeRef.current.contentDocument;
+      if (doc) {
+        const scrollPosition = {
+          x: iframeRef.current.contentWindow?.scrollX || 0,
+          y: iframeRef.current.contentWindow?.scrollY || 0
+        };
+
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <base href="https://en.wikipedia.org/" />
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                * { 
+                  cursor: default !important;
+                  -webkit-tap-highlight-color: transparent !important;
+                  user-select: none !important;
+                  -webkit-touch-callout: none !important;
+                }
+                .selectable * { 
+                  cursor: crosshair !important; 
+                }
+                .highlight-target { 
+                  outline: 2px solid #2563eb !important;
+                  background: rgba(37, 99, 235, 0.1) !important;
+                }
+                .preview-element {
+                  outline: 3px solid #eab308 !important;
+                  background: rgba(234, 179, 8, 0.1) !important;
+                }
+                .selected-element {
+                  outline: 3px solid #16a34a !important;
+                  background: rgba(22, 163, 74, 0.1) !important;
+                }
+              </style>
+            </head>
+            <body>
+              ${contentRef.current}
+              <script>
+                document.addEventListener('click', function(e) {
+                  if (e.target.tagName === 'A') {
+                    e.preventDefault();
+                  }
+                });
+              </script>
+            </body>
+          </html>
+        `);
+        doc.close();
+
+        if (iframeRef.current.contentWindow) {
+          iframeRef.current.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
+        }
+        setIsIframeLoaded(true);
+      }
+    }
   }, [content]);
 
   useEffect(() => {
     const iframe = iframeRef.current;
-    if (!iframe) return;
+    if (!iframe || !isIframeLoaded) return;
 
-    const setupIframe = () => {
-      const doc = iframe.contentDocument;
-      if (!doc) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
 
-      // Store scroll position
-      const scrollPosition = {
-        x: iframe.contentWindow?.scrollX || 0,
-        y: iframe.contentWindow?.scrollY || 0
-      };
+    // Toggle selection mode class
+    doc.body.classList.toggle('selectable', isSelectionMode);
 
-      // Write content
-      doc.open();
-      doc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <base href="https://en.wikipedia.org/" />
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              * { 
-                cursor: default !important;
-                -webkit-tap-highlight-color: transparent !important;
-                user-select: none !important;
-                -webkit-touch-callout: none !important;
-              }
-              .selectable * { 
-                cursor: crosshair !important; 
-              }
-              .highlight-target { 
-                outline: 2px solid #2563eb !important;
-                background: rgba(37, 99, 235, 0.1) !important;
-              }
-              .preview-element {
-                outline: 3px solid #eab308 !important;
-                background: rgba(234, 179, 8, 0.1) !important;
-              }
-              .selected-element {
-                outline: 3px solid #16a34a !important;
-                background: rgba(22, 163, 74, 0.1) !important;
-              }
-            </style>
-          </head>
-          <body>
-            ${contentRef.current}
-            <script>
-              document.addEventListener('click', function(e) {
-                if (e.target.tagName === 'A') {
-                  e.preventDefault();
-                }
-              }, true);
-            </script>
-          </body>
-        </html>
-      `);
-      doc.close();
+    // Add event listeners
+    const handleMouseOver = (e: MouseEvent) => {
+      if (!isSelectionMode) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
 
-      // Restore scroll position
-      if (iframe.contentWindow) {
-        iframe.contentWindow.scrollTo(scrollPosition.x, scrollPosition.y);
+      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
+        target.classList.add('highlight-target');
       }
+    };
 
-      // Add event listeners
-      const handleMouseOver = (e: MouseEvent) => {
-        if (!isSelectionMode) return;
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-        if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
-          target.classList.add('highlight-target');
-        }
-      };
-
-      const handleMouseOut = (e: MouseEvent) => {
-        if (!isSelectionMode) return;
-        const target = e.target as HTMLElement;
-        if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
-          target.classList.remove('highlight-target');
-        }
-      };
-
-      const handleClick = (e: MouseEvent) => {
-        if (!isSelectionMode) return;
-        e.preventDefault();
-        e.stopPropagation();
-
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
-
-        // Remove highlight
+    const handleMouseOut = (e: MouseEvent) => {
+      if (!isSelectionMode) return;
+      const target = e.target as HTMLElement;
+      if (!target.classList.contains('preview-element') && !target.classList.contains('selected-element')) {
         target.classList.remove('highlight-target');
-        setPreviewElement(target);
-      };
-
-      doc.addEventListener('mouseover', handleMouseOver);
-      doc.addEventListener('mouseout', handleMouseOut);
-      doc.addEventListener('click', handleClick);
-      doc.addEventListener('contextmenu', (e) => e.preventDefault());
-
-      // Toggle selection mode class
-      doc.body.classList.toggle('selectable', isSelectionMode);
-
-      return () => {
-        doc.removeEventListener('mouseover', handleMouseOver);
-        doc.removeEventListener('mouseout', handleMouseOut);
-        doc.removeEventListener('click', handleClick);
-        doc.removeEventListener('contextmenu', (e) => e.preventDefault());
-      };
+      }
     };
 
-    const cleanup = setupIframe();
+    const handleClick = (e: MouseEvent) => {
+      if (!isSelectionMode) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'HTML' || target.tagName === 'BODY') return;
+
+      // Remove highlight
+      target.classList.remove('highlight-target');
+      setPreviewElement(target);
+    };
+
+    doc.addEventListener('mouseover', handleMouseOver);
+    doc.addEventListener('mouseout', handleMouseOut);
+    doc.addEventListener('click', handleClick);
+    doc.addEventListener('contextmenu', (e) => e.preventDefault());
+
     return () => {
-      if (cleanup) cleanup();
+      doc.removeEventListener('mouseover', handleMouseOver);
+      doc.removeEventListener('mouseout', handleMouseOut);
+      doc.removeEventListener('click', handleClick);
+      doc.removeEventListener('contextmenu', (e) => e.preventDefault());
     };
-  }, [isSelectionMode, content]);
-
-  useEffect(() => {
-    if (iframeRef.current) {
-      iframeRef.current.style.transform = `scale(${zoom})`;
-      iframeRef.current.style.transformOrigin = 'top left';
-    }
-  }, [zoom]);
+  }, [isSelectionMode, isIframeLoaded]);
 
   const handleConfirmSelection = () => {
     if (!previewElement) return;

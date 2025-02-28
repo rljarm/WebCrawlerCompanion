@@ -140,21 +140,6 @@ export default function ElementSelector({ selectedElement, url, onSelectionStart
     );
   };
 
-  if (selectedSelectors.length === 0) {
-    return (
-      <div className="fixed bottom-4 left-4">
-        <Button
-          type="button"
-          onClick={onSelectionStart}
-          variant="secondary"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Select Elements
-        </Button>
-      </div>
-    );
-  }
-
   return (
     <div className="fixed bottom-4 left-4 flex flex-col gap-2">
       {selectedSelectors.map((selector, index) => (
