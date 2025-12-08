@@ -137,7 +137,7 @@ The following Replit-specific packages are currently in use:
 
 1. **Remove Current Packages**:
    ```bash
-   npm uninstall passport passport-local memorystore
+   npm uninstall --save passport passport-local memorystore
    ```
 
 2. **Install OAuth2 Packages**:
@@ -305,27 +305,27 @@ Update one at a time and test thoroughly:
 
 1. **React 19 Migration**:
    ```bash
-   npm install react@19 react-dom@19 @types/react@19 @types/react-dom@19
+   npm install react@latest react-dom@latest @types/react@latest @types/react-dom@latest
    ```
    - Test all components
    - Update any deprecated APIs
    
 2. **Zod v4 Migration**:
    ```bash
-   npm install zod@4 zod-validation-error@5 @hookform/resolvers@5
+   npm install zod@latest zod-validation-error@latest @hookform/resolvers@latest
    ```
    - Review form validations
    - Test all API endpoints with validation
    
 3. **Express v5 Migration** (Optional - consider alternatives):
    ```bash
-   npm install express@5 @types/express@5
+   npm install express@latest @types/express@latest
    ```
    - Or consider: Fastify, Hono, or Elysia for better TypeScript support
 
 4. **UI Library Updates**:
    ```bash
-   npm install react-day-picker@9 react-resizable-panels@3 recharts@3
+   npm install react-day-picker@latest react-resizable-panels@latest recharts@latest
    ```
    - Update component usage as needed
 
@@ -333,8 +333,8 @@ Update one at a time and test thoroughly:
 
 #### **Add for OAuth2 Implementation**:
 ```bash
-npm install jsonwebtoken axios dotenv
-npm install @types/jsonwebtoken --save-dev
+npm install jsonwebtoken@latest axios@latest dotenv@latest
+npm install @types/jsonwebtoken@latest --save-dev
 ```
 
 **Note**: Using `axios` for HTTP requests to OAuth2 providers. The `dotenv` package helps manage environment variables during development.
