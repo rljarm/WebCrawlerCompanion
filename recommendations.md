@@ -142,11 +142,12 @@ The following Replit-specific packages are currently in use:
 
 2. **Install OAuth2 Packages**:
    ```bash
-   npm install @node-oauth/express-oauth-server oauth2-server
-   npm install passport-oauth2
    npm install jsonwebtoken
    npm install @types/jsonwebtoken --save-dev
+   npm install axios  # For making OAuth2 HTTP requests
    ```
+
+   **Note**: Implementing OAuth2 directly with axios/fetch provides more control and removes dependency on Passport. Alternatively, consider `@node-oauth/oauth2-server` if you need a full OAuth2 server implementation.
 
 3. **Session Management**:
    - Keep `express-session` for session management
@@ -287,9 +288,9 @@ These can be updated with minimal risk:
 
 #### **Phase 1: Safe Updates** (Low Risk)
 ```bash
-npm update lucide-react
-npm update embla-carousel-react
-npm update input-otp
+npm install lucide-react@latest
+npm install embla-carousel-react@latest
+npm install input-otp@latest
 ```
 
 #### **Phase 2: Medium Risk Updates** (Test Required)
@@ -332,9 +333,11 @@ Update one at a time and test thoroughly:
 
 #### **Add for OAuth2 Implementation**:
 ```bash
-npm install jsonwebtoken dotenv
+npm install jsonwebtoken axios dotenv
 npm install @types/jsonwebtoken --save-dev
 ```
+
+**Note**: Using `axios` for HTTP requests to OAuth2 providers. The `dotenv` package helps manage environment variables during development.
 
 #### **Consider Adding**:
 - **helmet** - Security headers middleware
@@ -459,8 +462,10 @@ export default defineConfig({
 
 2. **Add Security Middleware**:
    ```bash
-   npm install helmet cors express-rate-limit
+   npm install helmet cors rate-limiter-flexible
    ```
+   
+   **Note**: Using `rate-limiter-flexible` as mentioned earlier for more advanced rate limiting with support for various stores (Redis, PostgreSQL, etc.)
 
 3. **CSRF Protection**:
    - Implement CSRF tokens for state-changing operations
@@ -568,57 +573,57 @@ jobs:
 
 ### 9.1 Immediate Actions (Remove Replit Dependencies)
 
-1. ✅ Remove Replit npm packages:
+1. 🔲 Remove Replit npm packages:
    ```bash
    npm uninstall @replit/vite-plugin-shadcn-theme-json @replit/vite-plugin-cartographer @replit/vite-plugin-runtime-error-modal
    ```
 
-2. ✅ Update `vite.config.ts` (remove Replit plugins)
+2. 🔲 Update `vite.config.ts` (remove Replit plugins)
 
-3. ✅ Delete `.replit` file
+3. 🔲 Delete `.replit` file
 
-4. ✅ Delete `theme.json` file (convert to CSS variables)
+4. 🔲 Delete `theme.json` file (convert to CSS variables)
 
-5. ✅ Create Docker/docker-compose setup
+5. 🔲 Create Docker/docker-compose setup
 
 ### 9.2 Short-term Actions (Auth Migration)
 
-1. ✅ Remove unused auth packages:
+1. 🔲 Remove unused auth packages:
    ```bash
    npm uninstall passport passport-local memorystore
    ```
 
-2. ✅ Install OAuth2 dependencies
+2. 🔲 Install OAuth2 dependencies
 
-3. ✅ Add user schema and migrations
+3. 🔲 Add user schema and migrations
 
-4. ✅ Implement OAuth2 routes and middleware
+4. 🔲 Implement OAuth2 routes and middleware
 
-5. ✅ Create login UI and auth context
+5. 🔲 Create login UI and auth context
 
-6. ✅ Configure OAuth2 providers (Mailcow & Authentik)
+6. 🔲 Configure OAuth2 providers (Mailcow & Authentik)
 
 ### 9.3 Medium-term Actions (Dependency Updates)
 
-1. ✅ Update safe dependencies (Phase 1)
+1. 🔲 Update safe dependencies (Phase 1)
 
-2. ✅ Update medium-risk dependencies (Phase 2) with testing
+2. 🔲 Update medium-risk dependencies (Phase 2) with testing
 
-3. ✅ Plan React 19 migration (Phase 3)
+3. 🔲 Plan React 19 migration (Phase 3)
 
-4. ✅ Consider Express alternatives or upgrade to Express 5
+4. 🔲 Consider Express alternatives or upgrade to Express 5
 
 ### 9.4 Long-term Actions (Improvements)
 
-1. ✅ Add comprehensive testing (unit, integration)
+1. 🔲 Add comprehensive testing (unit, integration)
 
-2. ✅ Set up CI/CD pipeline
+2. 🔲 Set up CI/CD pipeline
 
-3. ✅ Implement logging and monitoring
+3. 🔲 Implement logging and monitoring
 
-4. ✅ Add error tracking (Sentry, etc.)
+4. 🔲 Add error tracking (Sentry, etc.)
 
-5. ✅ Performance optimization
+5. 🔲 Performance optimization
 
 ---
 
