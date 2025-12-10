@@ -1,4 +1,4 @@
-import { pgTable, text, serial, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, jsonb, timestamp, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -27,7 +27,10 @@ export const users = pgTable("users", {
   providerId: text("provider_id").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   lastLogin: timestamp("last_login")
-});
+}, (table) => ({
+  // Composite unique constraint: same user can't have duplicate provider entries
+  providerUnique: unique().on(table.provider, table.providerId)
+}));
 
 export const insertProxyConfigSchema = createInsertSchema(proxyConfigs).pick({
   name: true,
