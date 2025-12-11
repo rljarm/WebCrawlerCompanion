@@ -1,7 +1,7 @@
 # WebCrawlerCompanion - Replit Dependencies and Upgrade Recommendations
 
 ## Executive Summary
-This document outlines Replit-specific dependencies, outdated packages, and recommendations for migrating the authentication system from passport-local to OAuth2 with mailcow/authentik providers.
+This document outlines Replit-specific dependencies, outdated packages, and recommendations for migrating the authentication system from passport-local to OAuth2 with mailcow/authentik providers. The runtime now targets **Python 3.12** (pinned via `.python-version` and installed in the Docker image) with no current Python dependencies; add pip packages as features require and keep them current.
 
 ---
 
@@ -585,6 +585,7 @@ jobs:
 4. 🔲 Delete `theme.json` file (convert to CSS variables)
 
 5. 🔲 Create Docker/docker-compose setup
+6. 🔲 Pin Python runtime to **3.12** (`.python-version`, Docker installs python3/py3-pip) and keep any future pip dependencies current
 
 ### 9.2 Short-term Actions (Auth Migration)
 
@@ -679,6 +680,6 @@ jobs:
 
 ---
 
-*Document generated on: 2025-12-08*
+*Document generated on: 2025-12-11*
 *Project: WebCrawlerCompanion*
 *Analysis version: 1.0*

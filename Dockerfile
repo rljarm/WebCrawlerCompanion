@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install Python 3.12 runtime (aligns with .python-version) for auxiliary tooling
+RUN apk add --no-cache python3 py3-pip
+
 # Install dependencies
 COPY package*.json ./
 RUN npm ci
@@ -16,6 +19,9 @@ RUN npm run build
 FROM node:20-alpine AS production
 
 WORKDIR /app
+
+# Install Python 3.12 runtime (aligns with .python-version) for auxiliary tooling
+RUN apk add --no-cache python3 py3-pip
 
 # Install production dependencies only
 COPY package*.json ./
