@@ -2,7 +2,7 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Ensure Python runtime available for auxiliary tooling
+# Install Python 3.12 runtime (aligns with .python-version) for auxiliary tooling
 RUN apk add --no-cache python3 py3-pip
 
 # Install dependencies
@@ -20,7 +20,7 @@ FROM node:20-alpine AS production
 
 WORKDIR /app
 
-# Ensure Python runtime available for auxiliary tooling
+# Install Python 3.12 runtime (aligns with .python-version) for auxiliary tooling
 RUN apk add --no-cache python3 py3-pip
 
 # Install production dependencies only
