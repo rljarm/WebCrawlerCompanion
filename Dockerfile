@@ -2,6 +2,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Ensure Python runtime available for auxiliary tooling
+RUN apk add --no-cache python3 py3-pip
+
 # Install dependencies
 COPY package*.json ./
 RUN npm ci
@@ -16,6 +19,9 @@ RUN npm run build
 FROM node:20-alpine AS production
 
 WORKDIR /app
+
+# Ensure Python runtime available for auxiliary tooling
+RUN apk add --no-cache python3 py3-pip
 
 # Install production dependencies only
 COPY package*.json ./
