@@ -179,7 +179,13 @@ export type InsertMyTable = z.infer<typeof insertMyTableSchema>;
 
 Required environment variables (see `.env.example`):
 - **`DATABASE_URL`**: PostgreSQL connection string (required by Drizzle)
-- **`NODE_ENV`**: Set to `production` in production environment
+- **`NODE_ENV`**: Set to `production` in production environment, `development` for local dev
+- **`SESSION_SECRET`**: Random secret for session encryption (required for future auth)
+- **`PORT`**: Server port (defaults to 5000)
+
+Optional environment variables (for future OAuth2 implementation):
+- `MAILCOW_CLIENT_ID`, `MAILCOW_CLIENT_SECRET`, `MAILCOW_DOMAIN`
+- `AUTHENTIK_CLIENT_ID`, `AUTHENTIK_CLIENT_SECRET`, `AUTHENTIK_DOMAIN`
 
 Create a `.env` file for local development (do not commit to git).
 
@@ -194,7 +200,7 @@ Create a `.env` file for local development (do not commit to git).
 - Schema is defined in `shared/schema.ts`
 - Use `npm run db:push` to sync schema changes to database
 - Drizzle Kit configuration is in `drizzle.config.ts`
-- Migrations are generated in `./migrations` directory
+- Migrations will be generated in `./migrations` directory (created automatically on first migration)
 
 ## Authentication (Future Implementation)
 
