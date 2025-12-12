@@ -169,7 +169,7 @@ export type InsertMyTable = z.infer<typeof insertMyTableSchema>;
 
 ### Scripts
 
-- **`npm run dev`**: Start development server with hot reload (port 5000)
+- **`npm run dev`**: Start backend server with TypeScript support and hot reload (port 5000). Note: This runs only the Express server, which also serves the Vite dev middleware for frontend development
 - **`npm run build`**: Build for production (client + server)
 - **`npm run start`**: Start production server
 - **`npm run check`**: Run TypeScript type checking
@@ -179,9 +179,11 @@ export type InsertMyTable = z.infer<typeof insertMyTableSchema>;
 
 Required environment variables (see `.env.example`):
 - **`DATABASE_URL`**: PostgreSQL connection string (required by Drizzle)
+- **`POSTGRES_PASSWORD`**: PostgreSQL password (for Docker/docker-compose setup)
 - **`NODE_ENV`**: Set to `production` in production environment, `development` for local dev
 - **`SESSION_SECRET`**: Random secret for session encryption (required for future auth)
 - **`PORT`**: Server port (defaults to 5000)
+- **`APP_URL`**: Application base URL (e.g., http://localhost:5000)
 
 Optional environment variables (for future OAuth2 implementation):
 - `MAILCOW_CLIENT_ID`, `MAILCOW_CLIENT_SECRET`, `MAILCOW_DOMAIN`
@@ -276,15 +278,13 @@ Create a `.env` file for local development (do not commit to git).
 
 ## Dependencies to Avoid
 
-### Already Removed
-- **DO NOT** add back Replit-specific packages:
+- **DO NOT** add Replit-specific packages (these were previously removed):
   - `@replit/vite-plugin-shadcn-theme-json`
   - `@replit/vite-plugin-cartographer`
   - `@replit/vite-plugin-runtime-error-modal`
-
-### Deprecated or Planned for Removal
-- `passport` and `passport-local` - planned migration to OAuth2
-- No new local authentication strategies should be added
+- **DO NOT** add local authentication packages like `passport-local`
+  - The project is planned to use OAuth2 (mailcow/authentik) for authentication
+  - `express-session` and `connect-pg-simple` are available for future OAuth2 session management
 
 ## Code Review Checklist
 
